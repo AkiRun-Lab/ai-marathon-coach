@@ -694,11 +694,13 @@ VDOT範囲: {verification_log['vdot_range']['min']} 〜 {verification_log['vdot_
                 if st.session_state.training_paces and st.session_state.training_paces["success"]:
                     context_info += f"\n\n【システムによる練習ペース計算結果】\n{st.session_state.training_paces['calculation_log']}"
                 
-                # 会話履歴を構築
+               # 会話履歴を構築（Gemini API形式に変換）
                 chat_history = []
                 for msg in st.session_state.messages:
+                    # "assistant" を "model" に変換（Gemini APIの仕様）
+                    role = "model" if msg["role"] == "assistant" else "user"
                     chat_history.append({
-                        "role": msg["role"],
+                        "role": role,
                         "parts": [msg["content"]]
                     })
                 
