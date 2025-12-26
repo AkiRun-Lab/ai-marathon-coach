@@ -109,18 +109,18 @@ def load_csv_data():
     }
     
     try:
-        # VDOT一覧表の読み込み
-        df_vdot_list = pd.read_csv("data/VDOT一覧表.csv")
-        verification_log["files"].append("VDOT一覧表.csv")
-        verification_log["columns"]["VDOT一覧表"] = list(df_vdot_list.columns)
-        
+# VDOT一覧表の読み込み
+        df_vdot_list = pd.read_csv("data/vdot_list.csv")
+        verification_log["files"].append("vdot_list.csv")
+        verification_log["columns"]["VDOT_list"] = list(df_vdot_list.columns)
+
         # VDOT練習ペースの読み込み（列名の空白に注意）
-        df_pace = pd.read_csv("data/VDOT練習ペース.csv")
-        verification_log["files"].append("VDOT練習ペース.csv")
-        
+        df_pace = pd.read_csv("data/vdot_pace.csv")
+        verification_log["files"].append("vdot_pace.csv")
+
         # 列名のクリーニング（末尾の空白を除去）
         df_pace.columns = df_pace.columns.str.strip()
-        verification_log["columns"]["VDOT練習ペース"] = list(df_pace.columns)
+        verification_log["columns"]["VDOT_pace"] = list(df_pace.columns)
         
         # VDOTの範囲を確認（.min()と.max()を使用）
         vdot_col = "VDot" if "VDot" in df_pace.columns else "VDOT"
