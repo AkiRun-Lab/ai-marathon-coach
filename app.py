@@ -812,32 +812,48 @@ VDOT範囲: {verification_log['vdot_range']['min']} 〜 {verification_log['vdot_
     # ユーザー入力
     if prompt := st.chat_input("メッセージを入力してください..."):
         # ユーザーの入力からタイムを自動検出してVDOT計算
-        time_pattern = r'(\d{1,2}):(\d{2}):(\d{2})'
-        time_matches = re.findall(time_pattern, prompt)
+        detected_times = []
         
-        if time_matches:
-            for i, match in enumerate(time_matches):
-                h, m, s = map(int, match)
-                time_seconds = h * 3600 + m * 60 + s
+        # パターン1: h:mm:ss 形式（例: 2:51:31）
+        pattern1 = r'(\d{1,2}):(\d{2}):(\d{2})'
+        for match in re.findall(pattern1, prompt):
+            h, m, s = map(int, match)
+            detected_times.append(h * 3600 + m * 60 + s)
+        
+        # パターン2: h時間mm分ss秒 形式（例: 2時間51分31秒）
+        pattern2 = r'(\d{1,2})時間(\d{1,2})分(\d{1,2})秒?'
+        for match in re.findall(pattern2, prompt):
+            h, m, s = map(int, match)
+            detected_times.append(h * 3600 + m * 60 + s)
+        
+        # パターン3: h時間mm分ss 形式（秒がない場合、例: 2時間51分31）
+        pattern3 = r'(\d{1,2})時間(\d{1,2})分(\d{1,2})(?!秒)'
+        for match in re.findall(pattern3, prompt):
+            h, m, s = map(int, match)
+            time_sec = h * 3600 + m * 60 + s
+            if time_sec not in detected_times:
+                detected_times.append(time_sec)
+        
+        # 検出したタイムでVDOT計算
+        for i, time_seconds in enumerate(detected_times):
+            if time_seconds > 7200:  # 2時間以上ならフルマラソンと判定
+                vdot_result = calculate_vdot_from_time(
+                    st.session_state.df_vdot,
+                    "フルマラソン",
+                    time_seconds
+                )
                 
-                if time_seconds > 7200:  # 2時間以上ならフルマラソンと判定
-                    vdot_result = calculate_vdot_from_time(
-                        st.session_state.df_vdot,
-                        "フルマラソン",
-                        time_seconds
-                    )
-                    
-                    if vdot_result["vdot"]:
-                        # 最初のタイムは現在VDOT、2番目は目標VDOTとして扱う
-                        if i == 0 and not st.session_state.get("calculated_vdot"):
-                            st.session_state.calculated_vdot = vdot_result
-                            pace_result = calculate_training_paces(
-                                st.session_state.df_pace,
-                                vdot_result["vdot"]
-                            )
-                            st.session_state.training_paces = pace_result
-                        elif i == 1 and not st.session_state.get("target_vdot"):
-                            st.session_state.target_vdot = vdot_result
+                if vdot_result["vdot"]:
+                    # 最初のタイムは現在VDOT、2番目は目標VDOTとして扱う
+                    if i == 0 and not st.session_state.get("calculated_vdot"):
+                        st.session_state.calculated_vdot = vdot_result
+                        pace_result = calculate_training_paces(
+                            st.session_state.df_pace,
+                            vdot_result["vdot"]
+                        )
+                        st.session_state.training_paces = pace_result
+                    elif i == 1 and not st.session_state.get("target_vdot"):
+                        st.session_state.target_vdot = vdot_result
         
         # ユーザーメッセージを追加
         st.session_state.messages.append({"role": "user", "content": prompt})
