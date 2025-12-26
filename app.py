@@ -17,7 +17,7 @@ import io
 # アプリ設定
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "β0.15"
+APP_VERSION = "β0.16"
 
 # =============================================
 # ページ設定
@@ -428,6 +428,44 @@ def calculate_phase_vdots(current_vdot: float, target_vdot: float, num_phases: i
     return phase_vdots
 
 
+def calculate_marathon_time_from_vdot(df_vdot: pd.DataFrame, vdot: float) -> str:
+    """VDOTからマラソンタイムを線形補間で計算"""
+    try:
+        vdot_low = int(vdot)
+        vdot_high = vdot_low + 1
+        decimal_ratio = vdot - vdot_low
+        
+        row_low = df_vdot[df_vdot['VDOT'] == vdot_low]
+        row_high = df_vdot[df_vdot['VDOT'] == vdot_high]
+        
+        if row_low.empty:
+            return "N/A"
+        
+        time_low_str = str(row_low.iloc[0]['Marathon'])
+        time_low_sec = time_to_seconds(time_low_str)
+        
+        if row_high.empty or time_low_sec is None:
+            return time_low_str if time_low_sec else "N/A"
+        
+        time_high_str = str(row_high.iloc[0]['Marathon'])
+        time_high_sec = time_to_seconds(time_high_str)
+        
+        if time_high_sec is None:
+            return time_low_str
+        
+        # 線形補間（VDOTが上がるとタイムは短くなる）
+        time_sec = time_low_sec + (time_high_sec - time_low_sec) * decimal_ratio
+        
+        # HH:MM:SS形式に変換
+        hours = int(time_sec // 3600)
+        minutes = int((time_sec % 3600) // 60)
+        seconds = int(time_sec % 60)
+        
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    except Exception:
+        return "N/A"
+
+
 def get_training_start_date(race_date: datetime, min_weeks: int = 12) -> datetime:
     """トレーニング開始日を計算（最低12週確保、月曜始まり）"""
     today = datetime.now()
@@ -479,7 +517,7 @@ def get_gemini_model():
     return model
 
 
-def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, target_vdot_info: dict, df_pace: pd.DataFrame, training_weeks: int, start_date: datetime) -> str:
+def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, target_vdot_info: dict, df_pace: pd.DataFrame, training_weeks: int, start_date: datetime, df_vdot: pd.DataFrame = None) -> str:
     """トレーニング計画生成用のプロンプトを作成"""
     
     paces = pace_info.get("paces", {}) if pace_info else {}
@@ -491,19 +529,37 @@ def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, ta
     original_target_vdot = user_data.get("original_target_vdot")
     adjusted_target_vdot = user_data.get("adjusted_target_vdot")
     
+    # 中間目標マラソンタイムを計算
+    adjusted_marathon_time = ""
+    if adjusted_target_vdot and df_vdot is not None:
+        adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
+    
+    # 過去遡り開始の説明
+    today = datetime.now()
+    is_past_start = start_date < today
+    past_start_explanation = ""
+    if is_past_start:
+        past_start_explanation = f"""
+※ 本プログラムの仕様として最低12週間のトレーニング期間を確保しています。レース日までの期間が12週間に満たないため、開始日を過去の日付（{start_date.strftime('%Y/%m/%d')}）に設定しています。実際には本日から計画を参考にしてください。
+"""
+    
     # VDOT調整の説明文
     vdot_adjustment_note = ""
     if adjusted_target_vdot and original_target_vdot and adjusted_target_vdot != original_target_vdot:
         vdot_adjustment_note = f"""
 ## ⚠️ 目標VDOTの調整について（重要）
 
-ユーザーが入力した目標VDOT（{original_target_vdot}）と現在のVDOT（{current_vdot}）の差が3.0を超えていたため、
-今回のトレーニング計画では**中間目標として VDOT {adjusted_target_vdot}** を設定しています。
+ユーザーが入力した目標タイム（{user_data.get('target_time', '')}、VDOT {original_target_vdot}）と現在のVDOT（{current_vdot}）の差が3.0を超えていたため、
+今回のトレーニング計画では**中間目標**を設定しています：
+
+- **中間目標VDOT: {adjusted_target_vdot}**（VDOT差 3.0）
+- **中間目標マラソンタイム: {adjusted_marathon_time}**
 
 これは、1つのトレーニングサイクル（12〜16週間）で安全かつ効果的に達成できる範囲に調整したものです。
-この中間目標を達成した後、次のトレーニングサイクルで最終目標（VDOT {original_target_vdot}）を目指すことを推奨します。
+この中間目標を達成した後、次のトレーニングサイクルで最終目標（VDOT {original_target_vdot} / {user_data.get('target_time', '')}）を目指すことを推奨します。
 
-**この調整について、計画の冒頭で丁寧に説明してください。**
+**この調整について、計画の冒頭（基本情報の直後）で丁寧に説明してください。**
+{past_start_explanation}
 """
     
     # レース日（フォーマット統一: YYYY/MM/DD）
@@ -592,6 +648,35 @@ def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, ta
 あなたは、ジャック・ダニエルズの「ランニング・フォーミュラ（VDOT理論）」を信奉するマラソン専属コーチです。
 信念：「Train where you are（今の実力で練習し、目標の実力でレースをする）」
 
+# 専門用語辞書（必ず正確に理解して使用すること）
+
+1. **土日セット練習（セット練）：**
+2日連続でポイント練習を行う手法。**1日目（土曜）に高強度（インターバル等）でグリコーゲンを枯渇させ、2日目（日曜）に疲労した状態で距離走（Mペース等）を行う**。フルマラソン30km以降の「足が終わった状態」を擬似的に作り出し、脂質代謝能力と精神的耐性を高めることが目的。
+
+2. **ダブルスレッショルド：**
+1日のうちに午前・午後の2回、閾値（LT）強度の練習を行うノルウェー方式のメソッド。乳酸値を2.0〜4.5mmol/Lに制御することで、オーバートレーニングを避けつつ、週全体の閾値走行ボリュームを最大化する。
+
+3. **（午前午後）2部練：**
+単に距離を稼ぐためではなく、1回の走行による筋損傷（末梢疲労）を抑えつつ、1日を通した総負荷を高める手法。
+
+4. **Polarized Training (80/20ルール)：**
+全練習の80%を極めて低い強度（Zone 1-2）、20%を極めて高い強度（Zone 4-5）に振り分け、最も疲労が溜まりやすく効果が薄い中強度（Zone 3：グレーゾーン）を意図的に避けるトレーニング理論。
+
+5. **Exponential Decay Taper (指数関数的テーパリング)：**
+レース前の調整（テーパリング）において、練習の「強度（ペース）」は維持しつつ、「量（距離・時間）」を指数関数的に減らしていく手法。これにより、フィットネスを維持したまま疲労（フレッシュさ）を劇的に回復させる。
+
+6. **Drafting & Aerodynamics (ドラフティングと空気抵抗)：**
+サブ3以上の速度域（4:15/km以上）では空気抵抗がランニングエコノミーに大きく影響する。集団走行や他者の背後につくことによるエネルギー節約効果（数％〜最大10％程度）を戦略的に考慮する。
+
+7. **HRV (Heart Rate Variability / 心拍変動)：**
+自律神経の状態を示す指標。数値が低い場合は交感神経が優位（オーバートレーニング気味）、高い場合は副交感神経が優位（回復良好）と判断し、当日の練習強度を柔軟に変更する判断材料とする。
+
+8. **Anabolic/Catabolic Balance：**
+練習による破壊（カタボリック：異化）と、休養・栄養による合成（アナボリック：同化）のバランス。特に50代ランナーにおいては、テストステロン値の低下を考慮し、筋分解を防ぐためのタンパク質摂取とリカバリーを若年層より重視する。
+
+9. **箱根駅伝方式 vs 世界標準：**
+日本の伝統的な「月間走行距離」や「走り込み」を重視するスタイル（箱根方式）に対し、科学的な「強度管理」「乳酸測定」「VDOTベースのペース設定」を重視するスタイル（世界標準）を対比させる。本コーチは後者を推奨する。
+
 # ユーザー情報
 - ニックネーム: {user_data.get('name', '不明')}
 - 年齢: {user_data.get('age', '不明')}歳
@@ -637,10 +722,13 @@ def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, ta
 # 🏃‍♂️ {user_data.get('name', 'ユーザー')}さんのトレーニング計画
 
 ## 📊 基本情報
-- 現在のVDOT: {current_vdot} → 目標VDOT: {target_vdot}（VDOT差: {vdot_diff}）
-- 目標: {user_data.get('target_time', '')}（{user_data.get('race_name', '')} {race_date_str}）
+- 現在のVDOT: {current_vdot} → 今回の目標VDOT: {target_vdot}（VDOT差: {vdot_diff}）
+- 今回の目標タイム: {adjusted_marathon_time if adjusted_marathon_time else user_data.get('target_time', '')}（{user_data.get('race_name', '')} {race_date_str}）
+- 最終目標タイム: {user_data.get('target_time', '')}（VDOT {original_target_vdot if original_target_vdot else target_vdot}）※中間目標を達成後、次のサイクルで目指す
 - トレーニング期間: {training_weeks}週間（4フェーズ）
 - 開始日: {start_date_str}（月曜日）
+
+（※中間目標を設定していない場合は「今回の目標タイム」と「最終目標タイム」は同じになります。その場合は「最終目標タイム」の行は出力しないでください。）
 
 ---
 
@@ -702,7 +790,7 @@ VDOT {phase_vdots[2]} で、Mペースでのロング走やレースペースで
 
 #### 第1週（MM/DD（月）〜MM/DD（日））
 
-| 日付 | メニュー | 距離 | ペース | ポイント |
+| 日付 | メニュー | 距離 | ペース | 先生からのアドバイス |
 |:---|:---|:---|:---|:---|
 | MM/DD（月） | ... | ... | ... | ... |
 | MM/DD（火） | ... | ... | ... | ... |
@@ -735,27 +823,32 @@ VDOT {phase_vdots[2]} で、Mペースでのロング走やレースペースで
 5. 2026年のカレンダーを正確に参照し、曜日を間違えないこと
 6. **各週の表の後に「週間走行距離: XXkm」を必ず記載すること**
 
+## 【重要】表のフォーマット
+7. **週間トレーニング表のヘッダーは「日付 | メニュー | 距離 | ペース | 先生からのアドバイス」とすること**（「ポイント」ではなく「先生からのアドバイス」）
+8. **HTMLタグ（`<br>`等）は絶対に使用しないこと**。改行が必要な場合は、セル内で自然に記載するか、別の行に分けること
+9. 表形式は省略・改変せず、指定されたフォーマットを厳守すること
+
 ## 【重要】練習レースの扱い
-7. **練習レースは入力された日付に正確に配置すること**（日付を変更してはいけない）
-8. 練習レースはQトレーニング（ポイント練習）としてカウント
-9. **練習レース前日・前々日はポイント練習禁止**（Eペースジョグまたは休養のみ）
-10. 練習レース翌日はリカバリージョグ
+10. **練習レースは入力された日付に正確に配置すること**（日付を変更してはいけない）
+11. 練習レースはQトレーニング（ポイント練習）としてカウント
+12. **練習レース前日・前々日はポイント練習禁止**（Eペースジョグまたは休養のみ）
+13. 練習レース翌日はリカバリージョグ
 
 ## 【最重要】ポイント練習（Q）のルール
-11. **ポイント練習は週{user_data.get('point_training_days', '2')}回**とすること（練習レースを含む）
-12. **ポイント練習を2日連続で行ってはいけない**（必ず間に1日以上の回復日を入れる）
-13. ポイント練習の種類：インターバル走、テンポ走、ペース走、ロング走（25km以上）、練習レース
-14. **ロング走（25km以上）はポイント練習（Q）としてカウント**すること
-15. 練習レースがある週は、練習レースの前後に回復日を確保しつつ、週のポイント練習回数を調整すること
+14. **ポイント練習は週{user_data.get('point_training_days', '2')}回**とすること（練習レースを含む）
+15. **ポイント練習を2日連続で行ってはいけない**（必ず間に1日以上の回復日を入れる。ただし「土日セット練」が要望されている場合は例外）
+16. ポイント練習の種類：インターバル走、テンポ走、ペース走、ロング走（25km以上）、練習レース
+17. **ロング走（25km以上）はポイント練習（Q）としてカウント**すること
+18. 練習レースがある週は、練習レースの前後に回復日を確保しつつ、週のポイント練習回数を調整すること
 
 ## トレーニング内容ルール
-16. 各フェーズで、上記で指定したそのフェーズのVDOTに対応したペースを必ず使用すること
-17. **フェーズ1は現在のVDOT（{current_vdot}）**で練習すること
-18. 週間走行距離は{user_data.get('weekly_distance', '不明')}kmを目安にすること
-19. トレーニング開始日は{start_date_str}（月曜日）から始めること
-20. 全{training_weeks}週間分のメニューを出力すること
-21. 最終週はレースウィークとしてテーパリングを入れ、レース当日まで7日間出力すること
-22. レース日は必ず{race_date_with_day}とすること（この日付を最終日として逆算してスケジュールを組むこと）
+19. 各フェーズで、上記で指定したそのフェーズのVDOTに対応したペースを必ず使用すること
+20. **フェーズ1は現在のVDOT（{current_vdot}）**で練習すること
+21. 週間走行距離は{user_data.get('weekly_distance', '不明')}kmを目安にすること
+22. トレーニング開始日は{start_date_str}（月曜日）から始めること
+23. 全{training_weeks}週間分のメニューを出力すること
+24. 最終週はレースウィークとしてテーパリングを入れ、レース当日まで7日間出力すること
+25. レース日は必ず{race_date_with_day}とすること（この日付を最終日として逆算してスケジュールを組むこと）
 """
     
     return prompt
@@ -1027,6 +1120,24 @@ def main():
         # 実際に使用する目標VDOT（調整済みがあればそれを使用）
         effective_target_vdot = adjusted_target_vdot if adjusted_target_vdot else target_vdot['vdot']
         
+        # 中間目標マラソンタイムを計算
+        adjusted_marathon_time = ""
+        if adjusted_target_vdot:
+            adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
+        
+        # 過去遡り開始の説明
+        today = datetime.now()
+        is_past_start = start_date < today
+        past_start_note = ""
+        if is_past_start:
+            past_start_note = f"""
+    <hr style="border-color: #FFB74D; margin: 1rem 0;">
+    <h4>📅 トレーニング開始日について</h4>
+    <p>本プログラムの仕様として、<strong>最低12週間</strong>のトレーニング期間を確保しています。</p>
+    <p>レース日までの期間が12週間に満たないため、トレーニング開始日を <strong>{start_date.strftime('%Y/%m/%d')}（過去の日付）</strong> に設定しています。</p>
+    <p>実際には本日から計画を参考にして、残りの期間でできる限りのトレーニングを行ってください。</p>
+"""
+        
         # VDOT差チェックと警告
         if vdot_diff > 3.0 and adjusted_target_vdot:
             st.markdown(f"""
@@ -1036,9 +1147,14 @@ def main():
     <p>VDOT差が3.0を超える場合、1つのトレーニングサイクル（約12〜16週間）で達成するのは難しい可能性があります。</p>
     <hr style="border-color: #FFB74D; margin: 1rem 0;">
     <h4>📊 今回のトレーニング計画について</h4>
-    <p>そこで、今回のトレーニング計画では<strong>中間目標</strong>として <strong>VDOT {adjusted_target_vdot}</strong>（VDOT差 3.0）を設定します。</p>
-    <p>この中間目標を達成した後、次のトレーニングサイクルで最終目標（VDOT {original_target_vdot}）を目指すことをお勧めします。</p>
+    <p>そこで、今回のトレーニング計画では<strong>中間目標</strong>を設定します：</p>
+    <ul>
+        <li><strong>中間目標VDOT: {adjusted_target_vdot}</strong>（VDOT差 3.0）</li>
+        <li><strong>中間目標マラソンタイム: {adjusted_marathon_time}</strong></li>
+    </ul>
+    <p>この中間目標を達成した後、次のトレーニングサイクルで最終目標（VDOT {original_target_vdot} / {user_data.get('target_time', '')}）を目指すことをお勧めします。</p>
     <p><strong>段階的なアプローチ</strong>により、怪我のリスクを減らし、着実にタイムを縮めていくことができます。</p>
+    {past_start_note}
 </div>
             """, unsafe_allow_html=True)
         elif vdot_diff > 3.0:
@@ -1132,7 +1248,7 @@ def main():
                         }
                         prompt = create_training_prompt(
                             user_data, vdot_info, pace_info, effective_target_vdot_for_prompt, 
-                            df_pace, training_weeks, start_date
+                            df_pace, training_weeks, start_date, df_vdot
                         )
                         response = model.generate_content(prompt)
                         st.session_state.training_plan = response.text
