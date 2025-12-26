@@ -17,7 +17,7 @@ import io
 # アプリ設定
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "β0.17"
+APP_VERSION = "β0.18"
 
 # =============================================
 # ページ設定
@@ -534,32 +534,31 @@ def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, ta
     if adjusted_target_vdot and df_vdot is not None:
         adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
     
-    # 過去遡り開始の説明
+    # 過去遡り開始の判定
     today = datetime.now()
     is_past_start = start_date < today
-    past_start_explanation = ""
-    if is_past_start:
-        past_start_explanation = f"""
-※ 本プログラムの仕様として最低12週間のトレーニング期間を確保しています。レース日までの期間が12週間に満たないため、開始日を過去の日付（{start_date.strftime('%Y/%m/%d')}）に設定しています。実際には本日から計画を参考にしてください。
-"""
     
-    # VDOT調整の説明文
+    # VDOT調整の説明文（プロンプト用の情報提供のみ、Geminiへの出力指示は出力テンプレートで行う）
     vdot_adjustment_note = ""
     if adjusted_target_vdot and original_target_vdot and adjusted_target_vdot != original_target_vdot:
         vdot_adjustment_note = f"""
-## ⚠️ 目標VDOTの調整について（重要）
+## ⚠️ 目標VDOTの調整について（情報）
 
-ユーザーが入力した目標タイム（{user_data.get('target_time', '')}、VDOT {original_target_vdot}）と現在のVDOT（{current_vdot}）の差が3.0を超えていたため、
-今回のトレーニング計画では**中間目標**を設定しています：
+ユーザーが入力した目標タイム（{user_data.get('target_time', '')}、VDOT {original_target_vdot}）と現在のVDOT（{current_vdot}）の差が3.0を超えています。
+今回のトレーニング計画では中間目標を設定しています：
 
-- **中間目標VDOT: {adjusted_target_vdot}**（VDOT差 3.0）
-- **中間目標マラソンタイム: {adjusted_marathon_time}**
+- 中間目標VDOT: {adjusted_target_vdot}（VDOT差 3.0）
+- 中間目標マラソンタイム: {adjusted_marathon_time}
+- 最終目標: VDOT {original_target_vdot} / {user_data.get('target_time', '')}
 
-これは、1つのトレーニングサイクル（12〜16週間）で安全かつ効果的に達成できる範囲に調整したものです。
-この中間目標を達成した後、次のトレーニングサイクルで最終目標（VDOT {original_target_vdot} / {user_data.get('target_time', '')}）を目指すことを推奨します。
-
-**この調整について、計画の冒頭（基本情報の直後）で丁寧に説明してください。**
-{past_start_explanation}
+※この情報は出力テンプレートの「基本情報」セクションに既に反映されています。追加の説明セクションを作成しないでください。
+"""
+    
+    # 過去遡り開始の説明（出力テンプレートに直接反映する）
+    past_start_note = ""
+    if is_past_start:
+        past_start_note = f"""
+※ 本プログラムは最低12週間のトレーニング期間を確保します。レース日までの期間が12週間に満たないため、開始日を{start_date.strftime('%Y/%m/%d')}（過去の日付）に設定しています。実際には本日から計画を参考にしてください。
 """
     
     # レース日（フォーマット統一: YYYY/MM/DD）
@@ -715,8 +714,9 @@ def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, ta
 - 最終目標タイム: {user_data.get('target_time', '')}（VDOT {original_target_vdot if original_target_vdot else target_vdot}）※中間目標を達成後、次のサイクルで目指す
 - トレーニング期間: {training_weeks}週間（4フェーズ）
 - 開始日: {start_date_str}（月曜日）
-
+{past_start_note}
 （※中間目標を設定していない場合は「今回の目標タイム」と「最終目標タイム」は同じになります。その場合は「最終目標タイム」の行は出力しないでください。）
+（※past_start_noteが空の場合は、その行は出力しないでください。）
 
 ---
 
