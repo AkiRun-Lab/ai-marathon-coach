@@ -432,7 +432,7 @@ def get_gemini_model():
     
     # Gemini 2.5 Flash を使用
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite",
+        model_name="gemini-2.5-flash-preview-05-20",
         generation_config={
             "temperature": 0.7,
             "top_p": 0.95,
@@ -442,17 +442,21 @@ def get_gemini_model():
     return model
 
 
-def create_system_prompt(verification_log: dict, vdot_info: dict = None, pace_info: dict = None) -> str:
+def create_system_prompt(verification_log: dict, vdot_info: dict = None, pace_info: dict = None, target_vdot_info: dict = None) -> str:
     """システムプロンプトを生成"""
     
     # VDOT計算結果がある場合は追加
     vdot_section = ""
     if vdot_info and vdot_info.get("vdot"):
         paces = pace_info.get("paces", {}) if pace_info else {}
+        
+        target_section = ""
+        if target_vdot_info and target_vdot_info.get("vdot"):
+            target_section = f"\n- **目標VDOT: {target_vdot_info['vdot']}**"
+        
         vdot_section = f"""
 # 【最重要】システムが計算したVDOT情報（この値を必ず使用すること）
-- **現在のVDOT: {vdot_info['vdot']}**（この数値以外を使用することを固く禁止）
-- 計算根拠: {vdot_info.get('calculation_log', 'N/A')}
+- **現在のVDOT: {vdot_info['vdot']}**（この数値以外を使用することを固く禁止）{target_section}
 
 ## 練習ペース（この値を必ず使用すること）
 - E (Easy): {paces.get('E', {}).get('display', 'N/A')}/km
@@ -464,6 +468,7 @@ def create_system_prompt(verification_log: dict, vdot_info: dict = None, pace_in
 【絶対遵守】上記のVDOT値と練習ペースは、システムがCSVファイルから正確に計算した値です。
 あなたが独自に計算したり、異なる数値を使用することを固く禁じます。
 必ず上記の値をそのまま使用してください。
+画面上部の青いボックスに表示されている値と同じ値を使ってください。
 """
 
     return f"""# Role
@@ -560,6 +565,8 @@ def init_session_state():
         st.session_state.user_data = {}
     if "calculated_vdot" not in st.session_state:
         st.session_state.calculated_vdot = None
+    if "target_vdot" not in st.session_state:
+        st.session_state.target_vdot = None
     if "training_paces" not in st.session_state:
         st.session_state.training_paces = None
     if "verification_done" not in st.session_state:
@@ -686,6 +693,7 @@ VDOT範囲: {verification_log['vdot_range']['min']} 〜 {verification_log['vdot_
             st.session_state.user_data = {}
             st.session_state.verification_done = False
             st.session_state.calculated_vdot = None
+            st.session_state.target_vdot = None
             st.session_state.training_paces = None
             st.rerun()
     
@@ -717,6 +725,55 @@ VDOT範囲: {verification_log['vdot_range']['min']} 〜 {verification_log['vdot_
         """)
         st.markdown('</div>', unsafe_allow_html=True)
         st.session_state.verification_done = True
+    
+    # =============================================
+    # VDOT情報の常時表示エリア（計算結果がある場合）
+    # =============================================
+    if st.session_state.get("calculated_vdot") and st.session_state.calculated_vdot.get("vdot"):
+        vdot_info = st.session_state.calculated_vdot
+        pace_info = st.session_state.get("training_paces", {})
+        paces = pace_info.get("paces", {}) if pace_info else {}
+        
+        # 目標VDOTも計算（目標タイムがある場合）
+        target_vdot_display = ""
+        if st.session_state.get("target_vdot"):
+            target_vdot_display = f"　→　🎯 **目標VDOT: {st.session_state.target_vdot['vdot']}**"
+        
+        st.markdown(f"""
+<div style="background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%); color: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+    <h3 style="margin: 0 0 1rem 0; color: white;">📊 システム計算結果（この値が正確です）</h3>
+    <div style="font-size: 1.3rem; margin-bottom: 1rem;">
+        🏃 <strong>現在のVDOT: {vdot_info['vdot']}</strong>{target_vdot_display}
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; text-align: center;">
+        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
+            <div style="font-size: 0.8rem;">E (Easy)</div>
+            <div style="font-weight: bold;">{paces.get('E', {}).get('display', 'N/A')}/km</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
+            <div style="font-size: 0.8rem;">M (Marathon)</div>
+            <div style="font-weight: bold;">{paces.get('M', {}).get('display', 'N/A')}/km</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
+            <div style="font-size: 0.8rem;">T (Threshold)</div>
+            <div style="font-weight: bold;">{paces.get('T', {}).get('display', 'N/A')}/km</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
+            <div style="font-size: 0.8rem;">I (Interval)</div>
+            <div style="font-weight: bold;">{paces.get('I', {}).get('display', 'N/A')}/km</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
+            <div style="font-size: 0.8rem;">R (Repetition)</div>
+            <div style="font-weight: bold;">{paces.get('R', {}).get('display', 'N/A')}/km</div>
+        </div>
+    </div>
+</div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📐 計算過程を確認"):
+            st.code(vdot_info.get("calculation_log", "計算ログなし"))
+            if pace_info and pace_info.get("calculation_log"):
+                st.code(pace_info.get("calculation_log", ""))
     
     # チャット履歴の表示
     for message in st.session_state.messages:
@@ -757,23 +814,30 @@ VDOT範囲: {verification_log['vdot_range']['min']} 〜 {verification_log['vdot_
         # ユーザーの入力からタイムを自動検出してVDOT計算
         time_pattern = r'(\d{1,2}):(\d{2}):(\d{2})'
         time_matches = re.findall(time_pattern, prompt)
-        if time_matches and not st.session_state.get("calculated_vdot"):
-            # 最初に見つかったタイムでVDOT計算
-            h, m, s = map(int, time_matches[0])
-            time_seconds = h * 3600 + m * 60 + s
-            if time_seconds > 7200:  # 2時間以上ならフルマラソンと判定
-                vdot_result = calculate_vdot_from_time(
-                    st.session_state.df_vdot,
-                    "フルマラソン",
-                    time_seconds
-                )
-                if vdot_result["vdot"]:
-                    st.session_state.calculated_vdot = vdot_result
-                    pace_result = calculate_training_paces(
-                        st.session_state.df_pace,
-                        vdot_result["vdot"]
+        
+        if time_matches:
+            for i, match in enumerate(time_matches):
+                h, m, s = map(int, match)
+                time_seconds = h * 3600 + m * 60 + s
+                
+                if time_seconds > 7200:  # 2時間以上ならフルマラソンと判定
+                    vdot_result = calculate_vdot_from_time(
+                        st.session_state.df_vdot,
+                        "フルマラソン",
+                        time_seconds
                     )
-                    st.session_state.training_paces = pace_result
+                    
+                    if vdot_result["vdot"]:
+                        # 最初のタイムは現在VDOT、2番目は目標VDOTとして扱う
+                        if i == 0 and not st.session_state.get("calculated_vdot"):
+                            st.session_state.calculated_vdot = vdot_result
+                            pace_result = calculate_training_paces(
+                                st.session_state.df_pace,
+                                vdot_result["vdot"]
+                            )
+                            st.session_state.training_paces = pace_result
+                        elif i == 1 and not st.session_state.get("target_vdot"):
+                            st.session_state.target_vdot = vdot_result
         
         # ユーザーメッセージを追加
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -788,7 +852,8 @@ VDOT範囲: {verification_log['vdot_range']['min']} 〜 {verification_log['vdot_
                 system_prompt = create_system_prompt(
                     st.session_state.verification_log,
                     st.session_state.get("calculated_vdot"),
-                    st.session_state.get("training_paces")
+                    st.session_state.get("training_paces"),
+                    st.session_state.get("target_vdot")
                 )
                 
                 # 会話履歴を構築（Gemini API形式に変換）
