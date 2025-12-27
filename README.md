@@ -29,4 +29,4 @@ AI Marathon Coach (AMC) は、市民ランナーが効率的かつ安全にフ�
 
 ### 著作権・ライセンスについて
 本プログラムのソースコードは公開していますが、ロジックの流用や商用利用を検討される場合は、開発者までご連絡ください。
-© 2024 AkiRun All Rights Reserved.
+© 2025 AkiRun All Rights Reserved.
