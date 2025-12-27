@@ -17,7 +17,7 @@ import io
 # アプリ設定
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "β0.29"
+APP_VERSION = "β0.30"
 
 # =============================================
 # ページ設定
@@ -954,7 +954,7 @@ def main():
         
         # フッター（入力画面）
         st.markdown("---")
-        st.caption(f"{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート")
+        st.markdown(f'<p style="text-align: center; color: #888; font-size: 0.85rem;">{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート</p>', unsafe_allow_html=True)
     
     else:
         # ================== 結果表示 ==================
@@ -1173,7 +1173,7 @@ def main():
         
         # フッター（結果画面）
         st.markdown("---")
-        st.caption(f"{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート")
+        st.markdown(f'<p style="text-align: center; color: #888; font-size: 0.85rem;">{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート</p>', unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
