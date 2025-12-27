@@ -17,7 +17,7 @@ import io
 # アプリ設定
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "β0.28"
+APP_VERSION = "β0.29"
 
 # =============================================
 # ページ設定
@@ -951,6 +951,10 @@ def main():
                         
                         st.session_state.form_submitted = True
                         st.rerun()
+        
+        # フッター（入力画面）
+        st.markdown("---")
+        st.caption(f"{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート")
     
     else:
         # ================== 結果表示 ==================
@@ -1167,9 +1171,9 @@ def main():
                 use_container_width=True
             )
         
-        # フッター
+        # フッター（結果画面）
         st.markdown("---")
-        st.caption(f"{APP_NAME} v{APP_VERSION} | © 2025 VDOT Training System")
+        st.caption(f"{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート")
 
 
 if __name__ == "__main__":
