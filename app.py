@@ -633,7 +633,7 @@ def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, ta
 - 「オーバートレーニングは最大の敵」：選手生命を守ることが最優先
 
 【熟知している手法】
-ダニエルズ理論（VDOT）、ピラミッド型モデル、土日セット練習、ダブルスレッショルド、2部練
+ダニエルズ理論（VDOT）、ピラミッド型モデル、土日セット練習、ダブルスレッショルド、午前午後2部練
 
 # ユーザー情報
 - ニックネーム: {user_data.get('name', '不明')}
