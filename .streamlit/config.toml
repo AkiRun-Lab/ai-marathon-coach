@@ -3,16 +3,16 @@
 base = "light"
 
 # メインカラー（ボタン、リンクなど）- AkiRunブログに合わせて調整可
-primaryColor = "#1a3a6e"
+primaryColor = "#E63946"
 
 # 背景色
 backgroundColor = "#FFFFFF"
 
 # サイドバー・セカンダリ背景色
-secondaryBackgroundColor = "#F0F2F6"
+secondaryBackgroundColor = "#F8F9FA"
 
 # テキスト色
-textColor = "#262730"
+textColor = "#1A1A1A"
 
 # フォント
 font = "sans serif"
