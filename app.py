@@ -17,7 +17,7 @@ import io
 # アプリ設定
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "β0.35"
+APP_VERSION = "β0.36"
 
 # =============================================
 # ページ設定
@@ -682,6 +682,7 @@ def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, ta
 
 # ルール
 - 週は月曜始まり〜日曜終わり（7日間全て出力）
+- 練習可能日数は週{user_data.get('training_days', '6')}日を厳守すること（レース前日の調整ジョグも含めて日数を超えない）
 - ポイント練習は週{user_data.get('point_training_days', '2')}回（練習レース含む）
 - ポイント練習の連続禁止（セット練要望時は例外）
 - フェーズ1は現在のVDOT（{current_vdot}）で練習
