@@ -17,7 +17,7 @@ import io
 # アプリ設定
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "β0.34"
+APP_VERSION = "β0.35"
 
 # =============================================
 # ページ設定
@@ -878,9 +878,13 @@ def main():
             with col1:
                 weekly_distance = st.text_input("週間走行距離（km）", placeholder="例: 50-60")
             with col2:
-                training_days = st.selectbox("練習可能日数/週", [3, 4, 5, 6, 7], index=3)
+                training_days = st.selectbox("練習可能日数/週", [1, 2, 3, 4, 5, 6, 7], index=5)
             with col3:
-                point_training_days = st.selectbox("ポイント練習回数/週", [1, 2, 3], index=1)
+                # ポイント練習回数は練習可能日数を超えない（上限4回）
+                max_point_days = min(training_days, 4)
+                point_options = list(range(1, max_point_days + 1))
+                default_index = min(1, len(point_options) - 1)  # デフォルトは2回（可能なら）
+                point_training_days = st.selectbox("ポイント練習回数/週", point_options, index=default_index)
             
             concerns = st.text_area(
                 "AIコーチへの連絡事項（任意）", 
