@@ -3,7 +3,7 @@
 base = "light"
 
 # メインカラー（ボタン、リンクなど）- AkiRunブログに合わせて調整可
-primaryColor = "#FF4B4B"
+primaryColor = "#1a3a6e"
 
 # 背景色
 backgroundColor = "#FFFFFF"
