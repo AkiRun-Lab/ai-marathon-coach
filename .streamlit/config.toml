@@ -1,6 +1,6 @@
 [theme]
 # ライトモード（白基調）
-#base = "dark"
+base = "light"
 
 # メインカラー（ボタン、リンクなど）- AkiRunブログに合わせて調整可
 primaryColor = "#E63946"
