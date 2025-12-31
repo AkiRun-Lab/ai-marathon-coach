@@ -13,29 +13,6 @@ import re
 from datetime import datetime, timedelta
 import io
 
-# 埋め込み時の白いボーダーを削除
-st.markdown("""
-    <style>
-        iframe {
-            border: none !important;
-        }
-        .stApp {
-            border: none !important;
-            outline: none !important;
-        }
-        /* 埋め込みモードのボーダー削除 */
-        [data-testid="stAppViewContainer"] {
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-        }
-        html, body {
-            border: none !important;
-            outline: none !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 # =============================================
 # アプリ設定
 # =============================================
