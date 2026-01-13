@@ -9,7 +9,10 @@ import streamlit as st
 from datetime import datetime, timedelta
 
 # ローカルモジュール
-from src.config import APP_NAME, APP_VERSION, MAX_VDOT_DIFF_PER_CYCLE, MIN_TRAINING_WEEKS
+from src.config import (
+    APP_NAME, APP_VERSION, MIN_TRAINING_WEEKS,
+    get_max_vdot_diff, validate_training_conditions
+)
 from src.data_loader import load_csv_data
 from src.vdot import (
     calculate_vdot_from_time,
@@ -168,7 +171,7 @@ def render_input_form(df_vdot, df_pace):
         st.markdown('<div class="form-section-title">🏃‍♂️ 練習情報</div>', unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1:
-            weekly_distance = st.text_input("週間走行距離（km）", placeholder="例: 50-60")
+            weekly_distance = st.number_input("週間走行距離（km）", min_value=10, max_value=250, value=60, step=5)
         with col2:
             training_days = st.selectbox("練習可能日数/週", [1, 2, 3, 4, 5, 6, 7], index=5)
         with col3:
@@ -231,11 +234,32 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     
     vdot_diff = target_vdot_result["vdot"] - vdot_result["vdot"]
     
+    # 現在のVDOTに応じた許容VDOT差を取得
+    max_vdot_diff = get_max_vdot_diff(vdot_result["vdot"])
+    
     # VDOT差が大きい場合の調整
     original_target_vdot = target_vdot_result["vdot"]
     adjusted_target_vdot = None
-    if vdot_diff > MAX_VDOT_DIFF_PER_CYCLE:
-        adjusted_target_vdot = round(vdot_result["vdot"] + MAX_VDOT_DIFF_PER_CYCLE, 2)
+    if vdot_diff > max_vdot_diff:
+        adjusted_target_vdot = round(vdot_result["vdot"] + max_vdot_diff, 2)
+    
+    # トレーニング条件の判定
+    training_validation = validate_training_conditions(
+        target_vdot_result["vdot"], 
+        weekly_distance, 
+        training_days, 
+        point_training_days
+    )
+    
+    # 最低条件を満たさない場合、自動調整
+    effective_weekly_distance = weekly_distance
+    effective_training_days = training_days
+    effective_point_training_days = point_training_days
+    
+    if not training_validation['is_valid']:
+        effective_weekly_distance = max(weekly_distance, training_validation['min_distance'])
+        effective_training_days = max(training_days, training_validation['min_days'])
+        effective_point_training_days = max(point_training_days, training_validation['min_point'])
     
     # データ保存
     st.session_state.user_data = {
@@ -247,13 +271,18 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
         "race_name": race_name,
         "race_date": race_date.strftime("%Y-%m-%d"),
         "practice_races": practice_races,
-        "weekly_distance": weekly_distance,
-        "training_days": training_days,
-        "point_training_days": point_training_days,
+        "weekly_distance": effective_weekly_distance,  # 調整済み
+        "training_days": effective_training_days,      # 調整済み
+        "point_training_days": effective_point_training_days,  # 調整済み
+        "original_weekly_distance": weekly_distance,   # 元の入力
+        "original_training_days": training_days,       # 元の入力
+        "original_point_training_days": point_training_days,  # 元の入力
         "concerns": concerns,
         "vdot_diff": round(vdot_diff, 2),
+        "max_vdot_diff": max_vdot_diff,
         "original_target_vdot": original_target_vdot,
-        "adjusted_target_vdot": adjusted_target_vdot
+        "adjusted_target_vdot": adjusted_target_vdot,
+        "training_validation": training_validation
     }
     
     st.session_state.calculated_vdot = vdot_result
@@ -352,20 +381,48 @@ def render_result_page(df_vdot, df_pace, api_key):
     # 調整済み目標VDOTの取得
     adjusted_target_vdot = user_data.get("adjusted_target_vdot")
     original_target_vdot = user_data.get("original_target_vdot")
+    max_vdot_diff = user_data.get("max_vdot_diff", 3.0)
     effective_target_vdot = adjusted_target_vdot if adjusted_target_vdot else target_vdot['vdot']
     
+    # トレーニング条件の警告と自動調整
+    training_validation = user_data.get("training_validation", {})
+    if training_validation and not training_validation.get('is_valid', True):
+        original_distance = user_data.get("original_weekly_distance", user_data.get("weekly_distance"))
+        original_days = user_data.get("original_training_days", user_data.get("training_days"))
+        original_point = user_data.get("original_point_training_days", user_data.get("point_training_days"))
+        
+        adjustments = []
+        if original_distance < training_validation['min_distance']:
+            adjustments.append(f"週間走行距離: {original_distance}km → <strong>{training_validation['min_distance']}km</strong>")
+        if original_days < training_validation['min_days']:
+            adjustments.append(f"練習日数: {original_days}日 → <strong>{training_validation['min_days']}日</strong>")
+        if original_point < training_validation['min_point']:
+            adjustments.append(f"ポイント練習: {original_point}回 → <strong>{training_validation['min_point']}回</strong>")
+        
+        adjustments_html = "".join([f"<li>{a}</li>" for a in adjustments])
+        st.markdown(f"""
+<div class="warning-box">
+    <h4>⚠️ トレーニング条件の自動調整</h4>
+    <p>目標タイム達成に必要な最低条件を満たしていないため、以下のように自動調整してトレーニング計画を生成します：</p>
+    <ul>
+        {adjustments_html}
+    </ul>
+    <p>入力された条件と異なりますが、目標達成に必要な練習量です。現在の条件で難しい場合は、目標タイムの見直しをご検討ください。</p>
+</div>
+        """, unsafe_allow_html=True)
+    
     # VDOT差チェックと警告/確認
-    if vdot_diff > MAX_VDOT_DIFF_PER_CYCLE and adjusted_target_vdot:
+    if vdot_diff > max_vdot_diff and adjusted_target_vdot:
         adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
         st.markdown(f"""
 <div class="warning-box">
     <h4>⚠️ 目標タイムについての重要なお知らせ</h4>
     <p>現在のVDOT（{vdot_info['vdot']}）と入力された目標VDOT（{original_target_vdot}）の差が<strong>{vdot_diff}</strong>あります。</p>
-    <p>VDOT差が3.0を超える場合、1つのトレーニングサイクル（約12〜16週間）で達成するのは難しい可能性があります。</p>
+    <p>現在の走力レベルでは、VDOT差<strong>{max_vdot_diff}</strong>までが1サイクルで達成可能な目安です。</p>
     <h4>📊 今回のトレーニング計画について</h4>
     <p>そこで、今回のトレーニング計画では<strong>中間目標</strong>を設定します：</p>
     <ul>
-        <li><strong>中間目標VDOT:</strong> {adjusted_target_vdot}（VDOT差 3.0）</li>
+        <li><strong>中間目標VDOT:</strong> {adjusted_target_vdot}（VDOT差 {max_vdot_diff}）</li>
         <li><strong>中間目標マラソンタイム:</strong> {adjusted_marathon_time}</li>
     </ul>
     <p>この中間目標を達成した後、次のトレーニングサイクルで最終目標（VDOT {original_target_vdot} / {user_data.get('target_time', '')}）を目指すことをお勧めします。</p>
