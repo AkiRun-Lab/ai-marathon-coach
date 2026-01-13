@@ -1,0 +1,127 @@
+/* AI Marathon Coach - Styles */
+
+/* サイドバーを非表示 */
+[data-testid="stSidebar"] {
+    display: none;
+}
+
+.main-header {
+    font-size: 2.5rem;
+    color: #1E88E5;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.version-tag {
+    font-size: 0.9rem;
+    color: #888;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.sub-header {
+    font-size: 1.2rem;
+    color: #666;
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.form-section-title {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #1E88E5;
+    margin-bottom: 1rem;
+}
+
+.vdot-display {
+    background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.vdot-explanation {
+    background-color: #E3F2FD;
+    border-left: 4px solid #1E88E5;
+    padding: 1rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+    color: #1a1a1a;
+}
+
+.vdot-explanation h4 {
+    color: #1565C0;
+}
+
+.vdot-explanation p, .vdot-explanation li {
+    color: #333;
+}
+
+.warning-box {
+    background-color: #FFF3E0;
+    border-left: 4px solid #FF9800;
+    padding: 1rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+    color: #1a1a1a;
+}
+
+.warning-box h4 {
+    color: #E65100;
+}
+
+.warning-box p {
+    color: #333;
+}
+
+.success-box {
+    background-color: #E8F5E9;
+    border-left: 4px solid #4CAF50;
+    padding: 1rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+    color: #1a1a1a;
+}
+
+.success-box h4 {
+    color: #2E7D32;
+}
+
+.success-box p {
+    color: #333;
+}
+
+.error-box {
+    background-color: #FFEBEE;
+    border-left: 4px solid #F44336;
+    padding: 1rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1rem 0;
+    color: #1a1a1a;
+}
+
+.phase-explanation {
+    background-color: #F5F5F5;
+    padding: 1rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+    color: #1a1a1a;
+}
+
+.phase-explanation h4 {
+    color: #1565C0;
+}
+
+.phase-explanation table {
+    color: #333;
+}
+
+.phase-explanation th {
+    color: #1565C0;
+}
+
+.phase-explanation td {
+    color: #333;
+}

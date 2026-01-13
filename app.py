@@ -2,22 +2,32 @@
 AIマラソンコーチ - Streamlit App
 ジャック・ダニエルズのVDOT理論に基づくトレーニング計画生成
 
-Version: β0.9
+Version: 1.0.0
 """
 
 import streamlit as st
-import pandas as pd
-import google.generativeai as genai
-import json
-import re
 from datetime import datetime, timedelta
-import io
 
-# =============================================
-# アプリ設定
-# =============================================
-APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "β0.40"
+# ローカルモジュール
+from src.config import APP_NAME, APP_VERSION, MAX_VDOT_DIFF_PER_CYCLE, MIN_TRAINING_WEEKS
+from src.data_loader import load_csv_data
+from src.vdot import (
+    calculate_vdot_from_time,
+    calculate_training_paces,
+    calculate_marathon_time_from_vdot,
+    get_training_start_date,
+)
+from src.ai import GeminiClient, create_training_prompt
+from src.ai.gemini_client import sanitize_gemini_output, create_md_download
+from src.ui import load_css, render_vdot_display, render_phase_table
+from src.ui.components import (
+    render_header,
+    render_footer,
+    render_vdot_explanation,
+    render_warning_box,
+    render_disclaimer,
+)
+
 
 # =============================================
 # ページ設定
@@ -29,767 +39,26 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# =============================================
-# カスタムCSS
-# =============================================
-st.markdown("""
-<style>
-    /* サイドバーを非表示 */
-    [data-testid="stSidebar"] {
-        display: none;
-    }
-    
-    .main-header {
-        font-size: 2.5rem;
-        color: #1E88E5;
-        text-align: center;
-        margin-bottom: 0.5rem;
-    }
-    .version-tag {
-        font-size: 0.9rem;
-        color: #888;
-        text-align: center;
-        margin-bottom: 0.5rem;
-    }
-    .sub-header {
-        font-size: 1.2rem;
-        color: #666;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .form-section-title {
-        font-size: 1.1rem;
-        font-weight: bold;
-        color: #1E88E5;
-        margin-bottom: 1rem;
-    }
-    .vdot-display {
-        background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        margin: 1rem 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .vdot-explanation {
-        background-color: #E3F2FD;
-        border-left: 4px solid #1E88E5;
-        padding: 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 1rem 0;
-        color: #1a1a1a;
-    }
-    .vdot-explanation h4 {
-        color: #1565C0;
-    }
-    .vdot-explanation p, .vdot-explanation li {
-        color: #333;
-    }
-    .warning-box {
-        background-color: #FFF3E0;
-        border-left: 4px solid #FF9800;
-        padding: 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 1rem 0;
-        color: #1a1a1a;
-    }
-    .warning-box h4 {
-        color: #E65100;
-    }
-    .warning-box p {
-        color: #333;
-    }
-    .success-box {
-        background-color: #E8F5E9;
-        border-left: 4px solid #4CAF50;
-        padding: 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 1rem 0;
-        color: #1a1a1a;
-    }
-    .success-box h4 {
-        color: #2E7D32;
-    }
-    .success-box p {
-        color: #333;
-    }
-    .error-box {
-        background-color: #FFEBEE;
-        border-left: 4px solid #F44336;
-        padding: 1rem;
-        border-radius: 0 8px 8px 0;
-        margin: 1rem 0;
-        color: #1a1a1a;
-    }
-    .phase-explanation {
-        background-color: #F5F5F5;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        color: #1a1a1a;
-    }
-    .phase-explanation h4 {
-        color: #1565C0;
-    }
-    .phase-explanation table {
-        color: #333;
-    }
-    .phase-explanation th {
-        color: #1565C0;
-    }
-    .phase-explanation td {
-        color: #333;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
-# =============================================
-# CSVデータの読み込みとキャッシュ
-# =============================================
-@st.cache_data
-def load_csv_data():
-    """CSVファイルを読み込み、検証ログを生成"""
-    verification_log = {
-        "success": False,
-        "files": [],
-        "vdot_range": {"min": None, "max": None},
-        "columns": {},
-        "errors": []
-    }
-    
-    try:
-        df_vdot_list = pd.read_csv("data/vdot_list.csv")
-        verification_log["files"].append("vdot_list.csv")
-        verification_log["columns"]["VDOT_list"] = list(df_vdot_list.columns)
-
-        df_pace = pd.read_csv("data/vdot_pace.csv")
-        verification_log["files"].append("vdot_pace.csv")
-
-        df_pace.columns = df_pace.columns.str.strip()
-        verification_log["columns"]["VDOT_pace"] = list(df_pace.columns)
-        
-        vdot_col = "VDot" if "VDot" in df_pace.columns else "VDOT"
-        vdot_min = int(df_pace[vdot_col].min())
-        vdot_max = int(df_pace[vdot_col].max())
-        verification_log["vdot_range"]["min"] = vdot_min
-        verification_log["vdot_range"]["max"] = vdot_max
-        
-        verification_log["success"] = True
-        
-        return df_vdot_list, df_pace, verification_log
-        
-    except FileNotFoundError as e:
-        verification_log["errors"].append(f"ファイルが見つかりません: {str(e)}")
-        return None, None, verification_log
-    except Exception as e:
-        verification_log["errors"].append(f"読み込みエラー: {str(e)}")
-        return None, None, verification_log
-
-
-# =============================================
-# VDOT計算関数群
-# =============================================
-def time_to_seconds(time_str: str) -> int:
-    """時間文字列を秒に変換"""
-    if pd.isna(time_str):
-        return None
-    
-    time_str = str(time_str).strip()
-    
-    if time_str.count(':') == 2:
-        parts = time_str.split(':')
-        if len(parts) == 3:
-            h, m, s = parts
-            return int(h) * 3600 + int(m) * 60 + int(s)
-    
-    elif time_str.count(':') == 1:
-        parts = time_str.split(':')
-        if len(parts) == 2:
-            m, s = parts
-            if ':' in str(s):
-                return int(m) * 60 + int(s.split(':')[0])
-            return int(m) * 60 + int(s)
-    
-    try:
-        return int(float(time_str))
-    except:
-        return None
-
-
-def seconds_to_time(seconds: int, include_hours: bool = False) -> str:
-    """秒を時間文字列に変換"""
-    if seconds is None:
-        return "N/A"
-    
-    seconds = round(seconds)
-    
-    if include_hours or seconds >= 3600:
-        h = seconds // 3600
-        m = (seconds % 3600) // 60
-        s = seconds % 60
-        return f"{h}:{m:02d}:{s:02d}"
-    else:
-        m = seconds // 60
-        s = seconds % 60
-        return f"{m}:{s:02d}"
-
-
-def calculate_vdot_from_time(df_vdot: pd.DataFrame, distance: str, time_seconds: int) -> dict:
-    """タイムからVDOTを線型補完で算出"""
-    result = {
-        "vdot": None,
-        "calculation_log": "",
-        "reference_data": {}
-    }
-    
-    distance_mapping = {
-        "5km": "5000m",
-        "5000m": "5000m",
-        "10km": "10000m",
-        "10000m": "10000m",
-        "ハーフ": "HalfMarathon",
-        "ハーフマラソン": "HalfMarathon",
-        "half": "HalfMarathon",
-        "フル": "Marathon",
-        "フルマラソン": "Marathon",
-        "marathon": "Marathon",
-        "マラソン": "Marathon"
-    }
-    
-    col_name = distance_mapping.get(distance, distance)
-    
-    if col_name not in df_vdot.columns:
-        result["calculation_log"] = f"エラー: 距離 '{distance}' が見つかりません"
-        return result
-    
-    vdot_times = []
-    for _, row in df_vdot.iterrows():
-        vdot = int(row['VDOT'])
-        time_val = row[col_name]
-        time_sec = time_to_seconds(str(time_val))
-        if time_sec:
-            vdot_times.append((vdot, time_sec))
-    
-    vdot_times.sort(key=lambda x: x[1], reverse=True)
-    
-    lower_vdot = None
-    upper_vdot = None
-    
-    for i, (vdot, time_sec) in enumerate(vdot_times):
-        if time_sec <= time_seconds:
-            lower_vdot = (vdot, time_sec)
-            if i > 0:
-                upper_vdot = vdot_times[i - 1]
-            break
-    
-    if lower_vdot is None:
-        lower_vdot = vdot_times[-1]
-        upper_vdot = vdot_times[-2] if len(vdot_times) > 1 else None
-    
-    if upper_vdot is None:
-        result["vdot"] = float(lower_vdot[0])
-        result["calculation_log"] = f"VDOT {lower_vdot[0]} を使用（範囲外のため最も近い値）"
-        return result
-    
-    vdot_low, time_low = upper_vdot
-    vdot_high, time_high = lower_vdot
-    
-    if vdot_low > vdot_high:
-        vdot_low, time_low, vdot_high, time_high = vdot_high, time_high, vdot_low, time_low
-    
-    if time_low != time_high:
-        ratio = (time_low - time_seconds) / (time_low - time_high)
-        calculated_vdot = vdot_low + (vdot_high - vdot_low) * ratio
-    else:
-        calculated_vdot = vdot_low
-    
-    result["vdot"] = round(calculated_vdot, 2)
-    result["reference_data"] = {
-        "vdot_low": vdot_low,
-        "time_low": seconds_to_time(time_low, True),
-        "time_low_sec": time_low,
-        "vdot_high": vdot_high,
-        "time_high": seconds_to_time(time_high, True),
-        "time_high_sec": time_high
-    }
-    result["calculation_log"] = (
-        f"【計算過程】\n"
-        f"参照データ: VDOT {vdot_low} = {seconds_to_time(time_low, True)}, "
-        f"VDOT {vdot_high} = {seconds_to_time(time_high, True)}\n"
-        f"入力タイム: {seconds_to_time(time_seconds, True)}\n"
-        f"計算式: {vdot_low} + ({vdot_high} - {vdot_low}) × "
-        f"({time_low} - {time_seconds}) / ({time_low} - {time_high})\n"
-        f"= {vdot_low} + {vdot_high - vdot_low} × {ratio:.4f}\n"
-        f"= {calculated_vdot:.2f}"
-    )
-    
-    return result
-
-
-def calculate_training_paces(df_pace: pd.DataFrame, vdot: float) -> dict:
-    """VDOTから練習ペースを線型補完で算出"""
-    result = {
-        "paces": {},
-        "calculation_log": "",
-        "success": False
-    }
-    
-    vdot_col = "VDot" if "VDot" in df_pace.columns else "VDOT"
-    
-    vdot_low = int(vdot)
-    vdot_high = vdot_low + 1
-    decimal_ratio = vdot - vdot_low
-    
-    row_low = df_pace[df_pace[vdot_col] == vdot_low]
-    row_high = df_pace[df_pace[vdot_col] == vdot_high]
-    
-    if row_low.empty:
-        result["calculation_log"] = f"エラー: VDOT {vdot_low} がファイルに存在しません"
-        return result
-    
-    if row_high.empty:
-        row_high = row_low
-        decimal_ratio = 0
-    
-    row_low = row_low.iloc[0]
-    row_high = row_high.iloc[0]
-    
-    pace_types = ["E_min", "E_max", "M", "T", "I", "R"]
-    calculation_details = []
-    
-    for pace_type in pace_types:
-        if pace_type not in df_pace.columns:
-            continue
-        
-        pace_low_str = str(row_low[pace_type])
-        pace_high_str = str(row_high[pace_type])
-        
-        pace_low_sec = time_to_seconds(pace_low_str)
-        pace_high_sec = time_to_seconds(pace_high_str)
-        
-        if pace_low_sec is None or pace_high_sec is None:
-            continue
-        
-        pace_sec = pace_low_sec + (pace_high_sec - pace_low_sec) * decimal_ratio
-        pace_sec = round(pace_sec)
-        
-        result["paces"][pace_type] = {
-            "seconds": pace_sec,
-            "display": seconds_to_time(pace_sec)
-        }
-        
-        calculation_details.append(
-            f"  {pace_type}: {pace_low_sec}秒 + ({pace_high_sec}秒 - {pace_low_sec}秒) × {decimal_ratio:.2f} "
-            f"= {pace_sec}秒 → {seconds_to_time(pace_sec)}/km"
-        )
-    
-    if "E_min" in result["paces"] and "E_max" in result["paces"]:
-        result["paces"]["E"] = {
-            "display": f"{result['paces']['E_min']['display']}〜{result['paces']['E_max']['display']}",
-            "min": result["paces"]["E_min"],
-            "max": result["paces"]["E_max"]
-        }
-    
-    result["calculation_log"] = (
-        f"【練習ペース計算過程】\n"
-        f"設定VDOT: {vdot} (VDOT {vdot_low} と VDOT {vdot_high} の間、比率 {decimal_ratio:.2f})\n"
-        f"参照データ（VDOT {vdot_low}）: E={row_low['E_min']}〜{row_low['E_max']}, "
-        f"M={row_low['M']}, T={row_low['T']}, I={row_low['I']}, R={row_low['R']}\n"
-        f"参照データ（VDOT {vdot_high}）: E={row_high['E_min']}〜{row_high['E_max']}, "
-        f"M={row_high['M']}, T={row_high['T']}, I={row_high['I']}, R={row_high['R']}\n"
-        f"計算詳細:\n" + "\n".join(calculation_details)
-    )
-    
-    result["success"] = True
-    return result
-
-
-def calculate_phase_vdots(current_vdot: float, target_vdot: float, num_phases: int = 4) -> list:
-    """フェーズごとのVDOT目標を計算（4フェーズ固定）
-    
-    フェーズ1: 現在のVDOT（基礎構築期）
-    フェーズ2〜4: 段階的に目標VDOTに近づける
-    """
-    vdot_diff = target_vdot - current_vdot
-    # フェーズ1は現在VDOT、残り3フェーズで目標に到達
-    step = vdot_diff / (num_phases - 1) if num_phases > 1 else vdot_diff
-    
-    phase_vdots = []
-    for i in range(num_phases):
-        if i == 0:
-            # フェーズ1は現在のVDOT
-            phase_vdots.append(round(current_vdot, 2))
-        else:
-            # フェーズ2以降は段階的に上昇
-            phase_vdot = round(current_vdot + step * i, 2)
-            phase_vdots.append(phase_vdot)
-    
-    return phase_vdots
-
-
-def calculate_marathon_time_from_vdot(df_vdot: pd.DataFrame, vdot: float) -> str:
-    """VDOTからマラソンタイムを線形補間で計算"""
-    try:
-        vdot_low = int(vdot)
-        vdot_high = vdot_low + 1
-        decimal_ratio = vdot - vdot_low
-        
-        row_low = df_vdot[df_vdot['VDOT'] == vdot_low]
-        row_high = df_vdot[df_vdot['VDOT'] == vdot_high]
-        
-        if row_low.empty:
-            return "N/A"
-        
-        time_low_str = str(row_low.iloc[0]['Marathon'])
-        time_low_sec = time_to_seconds(time_low_str)
-        
-        if row_high.empty or time_low_sec is None:
-            return time_low_str if time_low_sec else "N/A"
-        
-        time_high_str = str(row_high.iloc[0]['Marathon'])
-        time_high_sec = time_to_seconds(time_high_str)
-        
-        if time_high_sec is None:
-            return time_low_str
-        
-        # 線形補間（VDOTが上がるとタイムは短くなる）
-        time_sec = time_low_sec + (time_high_sec - time_low_sec) * decimal_ratio
-        
-        # HH:MM:SS形式に変換
-        hours = int(time_sec // 3600)
-        minutes = int((time_sec % 3600) // 60)
-        seconds = int(time_sec % 60)
-        
-        return f"{hours}:{minutes:02d}:{seconds:02d}"
-    except Exception:
-        return "N/A"
-
-
-def get_training_start_date(race_date: datetime, min_weeks: int = 12) -> datetime:
-    """トレーニング開始日を計算（最低12週確保、月曜始まり）"""
-    today = datetime.now()
-    
-    # レースまでの週数を計算
-    days_until_race = (race_date - today).days
-    weeks_until_race = days_until_race // 7
-    
-    # 12週未満の場合は過去に遡る
-    if weeks_until_race < min_weeks:
-        # レース日から12週前の月曜日を計算
-        start_date = race_date - timedelta(weeks=min_weeks)
-    else:
-        # 今日から始める
-        start_date = today
-    
-    # 月曜日に調整（次の月曜日）
-    days_until_monday = (7 - start_date.weekday()) % 7
-    if days_until_monday == 0 and start_date.weekday() != 0:
-        days_until_monday = 7
-    start_date = start_date + timedelta(days=days_until_monday)
-    
-    # もし開始日が月曜でない場合、前の月曜に調整
-    if start_date.weekday() != 0:
-        start_date = start_date - timedelta(days=start_date.weekday())
-    
-    return start_date
-
-
-# =============================================
-# Gemini API 設定
-# =============================================
-def get_gemini_model():
-    """Gemini APIモデルを取得"""
-    api_key = st.secrets.get("GEMINI_API_KEY", "")
-    if not api_key:
-        return None
-    
-    genai.configure(api_key=api_key)
-    
-    model = genai.GenerativeModel(
-        model_name="gemini-3-flash-preview",
-        generation_config={
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "max_output_tokens": 16384,
-        }
-    )
-    return model
-
-
-def create_training_prompt(user_data: dict, vdot_info: dict, pace_info: dict, target_vdot_info: dict, df_pace: pd.DataFrame, training_weeks: int, start_date: datetime, df_vdot: pd.DataFrame = None) -> str:
-    """トレーニング計画生成用のプロンプトを作成"""
-    
-    paces = pace_info.get("paces", {}) if pace_info else {}
-    current_vdot = vdot_info['vdot']
-    target_vdot = target_vdot_info['vdot'] if target_vdot_info else current_vdot
-    vdot_diff = round(target_vdot - current_vdot, 2)
-    
-    # 元の目標VDOTと調整済み目標VDOTの情報
-    original_target_vdot = user_data.get("original_target_vdot")
-    adjusted_target_vdot = user_data.get("adjusted_target_vdot")
-    
-    # 中間目標マラソンタイムを計算
-    adjusted_marathon_time = ""
-    if adjusted_target_vdot and df_vdot is not None:
-        adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
-    
-    # 過去遡り開始の判定
-    today = datetime.now()
-    is_past_start = start_date < today
-    
-    # VDOT調整の説明文（プロンプト用の情報提供のみ、Geminiへの出力指示は出力テンプレートで行う）
-    vdot_adjustment_note = ""
-    if adjusted_target_vdot and original_target_vdot and adjusted_target_vdot != original_target_vdot:
-        vdot_adjustment_note = f"""
-## ⚠️ 目標VDOTの調整について（情報）
-
-ユーザーが入力した目標タイム（{user_data.get('target_time', '')}、VDOT {original_target_vdot}）と現在のVDOT（{current_vdot}）の差が3.0を超えています。
-今回のトレーニング計画では中間目標を設定しています：
-
-- 中間目標VDOT: {adjusted_target_vdot}（VDOT差 3.0）
-- 中間目標マラソンタイム: {adjusted_marathon_time}
-- 最終目標: VDOT {original_target_vdot} / {user_data.get('target_time', '')}
-
-※この情報は出力テンプレートの「基本情報」セクションに既に反映されています。追加の説明セクションを作成しないでください。
-"""
-    
-    # 過去遡り開始の説明（出力テンプレートに直接反映する）
-    past_start_note = ""
-    if is_past_start:
-        past_start_note = f"""
-※ 本プログラムは最低12週間のトレーニング期間を確保します。レース日までの期間が12週間に満たないため、開始日を{start_date.strftime('%Y/%m/%d')}（過去の日付）に設定しています。実際には本日から計画を参考にしてください。
-"""
-    
-    # レース日（フォーマット統一: YYYY/MM/DD）
-    race_date_raw = user_data.get("race_date", "")
-    try:
-        race_dt = datetime.strptime(race_date_raw, "%Y-%m-%d")
-        race_date_str = race_dt.strftime("%Y/%m/%d")
-        race_weekday = ["月", "火", "水", "木", "金", "土", "日"][race_dt.weekday()]
-        race_date_with_day = f"{race_dt.strftime('%m/%d')}（{race_weekday}）"
-    except:
-        race_date_str = race_date_raw
-        race_date_with_day = race_date_raw
-    
-    # フェーズは4つ固定
-    num_phases = 4
-    weeks_per_phase = training_weeks // num_phases
-    remaining_weeks = training_weeks % num_phases
-    
-    # フェーズごとのVDOT目標を計算
-    phase_vdots = calculate_phase_vdots(current_vdot, target_vdot, num_phases)
-    
-    # 各フェーズのペース情報を生成
-    phase_paces_info = []
-    for i, phase_vdot in enumerate(phase_vdots):
-        phase_pace = calculate_training_paces(df_pace, phase_vdot)
-        phase_paces = phase_pace.get("paces", {})
-        phase_paces_info.append({
-            "phase": i + 1,
-            "vdot": phase_vdot,
-            "E": phase_paces.get('E', {}).get('display', 'N/A'),
-            "M": phase_paces.get('M', {}).get('display', 'N/A'),
-            "T": phase_paces.get('T', {}).get('display', 'N/A'),
-            "I": phase_paces.get('I', {}).get('display', 'N/A'),
-            "R": phase_paces.get('R', {}).get('display', 'N/A'),
-        })
-    
-    # フェーズ情報をテキスト化
-    phase_info_text = ""
-    for p in phase_paces_info:
-        phase_info_text += f"""
-### フェーズ{p['phase']}（VDOT {p['vdot']}）
-| ペース | 設定 |
-|:---|:---|
-| E (Easy) | {p['E']}/km |
-| M (Marathon) | {p['M']}/km |
-| T (Threshold) | {p['T']}/km |
-| I (Interval) | {p['I']}/km |
-| R (Repetition) | {p['R']}/km |
-"""
-    
-    # 練習レース情報（シンプルに）
-    practice_races_note = ""
-    if user_data.get('practice_races'):
-        practice_races_note = f"""
-# 練習レース
-{user_data.get('practice_races')}
-※練習レースは指定日に配置し、Qトレーニングとしてカウント。前日・前々日はEペースのみ。
-"""
-    
-    # 開始日のフォーマット
-    start_date_str = start_date.strftime("%Y/%m/%d")
-    
-    prompt = f"""# Role
-あなたは「AIマラソンコーチ」です。ジャック・ダニエルズ博士の「ランニング・フォーミュラ」を熟知し、科学的根拠に基づいたトレーニング計画を提案します。温かく親しみやすいですが、トレーニングの質には一切妥協しません。
-
-【目的】
-ユーザーの属性（年齢・性別・走力・生活環境）を理解し、目標タイムを達成するための「実現可能で安全な」トレーニング計画を提案すること。
-
-【指導哲学】
-- 「Train where you are」：今の走力で練習し、目標の走力でレースに臨む
-- 「ピラミッド型トレーニング」：週間走行距離の70-80%をE、15-20%をM/T、5-10%をI/Rに配分
-- 「オーバートレーニングは最大の敵」：選手生命を守ることが最優先
-
-【熟知している手法】
-ダニエルズ理論（VDOT）、ピラミッド型モデル、土日セット練習、ダブルスレッショルド、2部練
-
-# ユーザー情報
-- ニックネーム: {user_data.get('name', '不明')}
-- 年齢: {user_data.get('age', '不明')}歳 / 性別: {user_data.get('gender', '不明')}
-- 現在のベストタイム: {user_data.get('current_time', '不明')} → 目標タイム: {user_data.get('target_time', '不明')}
-- 本番レース: {user_data.get('race_name', '不明')}（{race_date_str} {race_weekday}曜日）
-- トレーニング期間: {training_weeks}週間（開始: {start_date_str}）
-- 練習レース: {user_data.get('practice_races', 'なし')}
-- 週間走行距離: {user_data.get('weekly_distance', '不明')}km / 練習可能日数: {user_data.get('training_days', '不明')}日 / ポイント練習: {user_data.get('point_training_days', '不明')}回
-
-# ユーザーからの要望（最優先で反映）
-{user_data.get('concerns', 'なし')}
-
-# VDOT情報
-- 現在: {current_vdot} → 目標: {target_vdot}（差: {vdot_diff}）
-{vdot_adjustment_note}
-
-# 4フェーズ構成（各約{weeks_per_phase}週間）
-| フェーズ | 期間 | VDOT | 目的 |
-|:---|:---|:---|:---|
-| 1（基礎構築期） | 第1〜{weeks_per_phase}週 | {phase_vdots[0]} | Eペース中心、有酸素能力構築 |
-| 2（強化期） | 第{weeks_per_phase+1}〜{weeks_per_phase*2}週 | {phase_vdots[1]} | T/I導入、持久力強化 |
-| 3（実践期） | 第{weeks_per_phase*2+1}〜{weeks_per_phase*3}週 | {phase_vdots[2]} | Mペース増加、レースシミュレーション |
-| 4（調整期） | 第{weeks_per_phase*3+1}〜{training_weeks}週 | {phase_vdots[3]} | テーパリング、疲労抜き |
-
-{phase_info_text}
-
-{practice_races_note}
-
-# 出力形式（Markdown）
-
-全{training_weeks}週間のトレーニング計画を以下の構成で出力してください：
-
-1. 基本情報（VDOT、目標タイム、期間）
-2. VDOTとペースの説明
-3. 4フェーズ構成の概要
-4. 週間トレーニング計画（全週分）
-5. 注意事項（5項目程度）
-6. コーチからのメッセージ
-
-## 週間トレーニング表
-- 各週は「**第N週（MM/DD - MM/DD）**」の見出しを付けること
-| 日付 | メニュー | 距離 | ペース | 先生からのアドバイス |
-- ペース列には記号と数値を併記（例：「E 5:02〜4:27」「T 3:49/km」「AM 6k(T 3:49) / PM 6k(T 3:49)」）
-- Eペースは必ず範囲で表記すること（例：「E 5:02〜4:27」）
-- 各週の最後に「週間走行距離: XXkm」を記載
-
-# ルール
-- 週は月曜始まり〜日曜終わり（7日間全て出力）
-- 練習可能日数は週{user_data.get('training_days', '6')}日を厳守すること（レース前日の調整ジョグも含めて日数を超えない）
-- ポイント練習は週{user_data.get('point_training_days', '2')}回（練習レース含む）
-- ポイント練習の連続禁止（セット練要望時は例外）
-- セット練、2部練、ダブルスレッショルドは、ユーザーからの要望があった場合のみ週間スケジュールに組み込むこと
-- フェーズ1は現在のVDOT（{current_vdot}）で練習
-- レース日は{race_date_with_day}
-- 開始日が過去の場合、基本情報セクションに以下の注記を必ず含めること：「※ 開始日が過去の日付になっています。本日から計画を参考にしてください。」
-- Markdownのみ使用（HTMLタグ禁止）
-
-# 練習レースの扱い
-- 練習レースは「Qトレーニング」として位置づける（本番ではない）
-- レースペースで走るのは最大1レースまで。それもレースペースで完走するのは、距離がハーフ以下の場合だけ。
-- 練習レースの走り方は、各フェーズの目的に合ったテーマを設定する
-- テーマ例：「前半抑えて後半ビルドアップ」「Mペースで淡々と」「30kmまでMペース、以降ジョグ」
-- ペース列には「レース」ではなく具体的なペース（T 3:50、M 4:00など）を記載
-- アドバイス欄で「全力」「出し切る」「攻める」は極力使わない
-
-# 出力の最後に以下を必ず含めること
----
-📚 もっと詳しく学びたい方へ： 科学的根拠に基づいて選んだ『推奨アイテムリスト』を運営ブログ「AkiRun｜走りを科学でアップデート」で紹介しています。
-👉 [【保存版】練習効率を最大化する「厳選ギア」をチェックする](https://akirun.net/recommended-gear/)
-
----
-*Generated by {APP_NAME} v{APP_VERSION}*
-"""
-    
-    return prompt
-
-
-# =============================================
-# MDダウンロード用関数
-# =============================================
-def create_md_download(content: str) -> bytes:
-    """Markdownファイルをダウンロード用バイトに変換（UTF-8 BOM付き）"""
-    bom = b'\xef\xbb\xbf'
-    content_bytes = content.encode('utf-8')
-    return bom + content_bytes
-
-
-def sanitize_gemini_output(content: str) -> str:
-    """Geminiの出力からHTMLタグを除去してMarkdownのみにする"""
-    import re
-    
-    # HTMLタグを含む行を検出して除去
-    lines = content.split('\n')
-    cleaned_lines = []
-    
-    # HTMLタグのパターン
-    html_patterns = [
-        r'<hr[^>]*>',
-        r'</?h[1-6][^>]*>',
-        r'</?p[^>]*>',
-        r'</?strong[^>]*>',
-        r'</?em[^>]*>',
-        r'</?div[^>]*>',
-        r'</?span[^>]*>',
-        r'</?br[^>]*>',
-        r'</?ul[^>]*>',
-        r'</?li[^>]*>',
-        r'</?ol[^>]*>',
-        r'</?a[^>]*>',
-        r'</?table[^>]*>',
-        r'</?tr[^>]*>',
-        r'</?td[^>]*>',
-        r'</?th[^>]*>',
-    ]
-    
-    for line in lines:
-        # 行にHTMLタグが含まれているかチェック
-        has_html = False
-        for pattern in html_patterns:
-            if re.search(pattern, line, re.IGNORECASE):
-                has_html = True
-                break
-        
-        # HTMLタグを含む行は除去
-        if has_html:
-            continue
-        
-        cleaned_lines.append(line)
-    
-    return '\n'.join(cleaned_lines)
-
 
 # =============================================
 # セッション状態の初期化
 # =============================================
 def init_session_state():
     """セッション状態を初期化"""
-    if "form_submitted" not in st.session_state:
-        st.session_state.form_submitted = False
-    if "user_data" not in st.session_state:
-        st.session_state.user_data = {}
-    if "calculated_vdot" not in st.session_state:
-        st.session_state.calculated_vdot = None
-    if "target_vdot" not in st.session_state:
-        st.session_state.target_vdot = None
-    if "training_paces" not in st.session_state:
-        st.session_state.training_paces = None
-    if "training_plan" not in st.session_state:
-        st.session_state.training_plan = None
-    if "data_loaded" not in st.session_state:
-        st.session_state.data_loaded = False
-    if "training_weeks" not in st.session_state:
-        st.session_state.training_weeks = 12
-    if "start_date" not in st.session_state:
-        st.session_state.start_date = None
+    defaults = {
+        "form_submitted": False,
+        "user_data": {},
+        "calculated_vdot": None,
+        "target_vdot": None,
+        "training_paces": None,
+        "training_plan": None,
+        "data_loaded": False,
+        "training_weeks": 12,
+        "start_date": None,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 
 # =============================================
@@ -798,10 +67,11 @@ def init_session_state():
 def main():
     init_session_state()
     
+    # CSS読み込み
+    load_css()
+    
     # ヘッダー
-    st.markdown(f'<h1 class="main-header">🏃 {APP_NAME}</h1>', unsafe_allow_html=True)
-    st.markdown(f'<p class="version-tag">Version {APP_VERSION}</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">ジャック・ダニエルズのVDOT理論に基づく、あなただけのトレーニング計画</p>', unsafe_allow_html=True)
+    render_header()
     
     # データ読み込み
     df_vdot, df_pace, verification_log = load_csv_data()
@@ -817,406 +87,364 @@ def main():
     st.session_state.df_pace = df_pace
     
     # API Key確認
-    if not st.secrets.get("GEMINI_API_KEY", ""):
-        st.error("⚠️ Gemini API Keyが設定されていません。Streamlit CloudのSecretsで設定してください。")
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    if not api_key:
+        st.error("⚠️ Gemini API Keyが設定されていません。.streamlit/secrets.tomlで設定してください。")
         return
     
     # メインコンテンツ
     if not st.session_state.form_submitted:
-        # ================== 入力フォーム ==================
-        
-        # お知らせ
-        st.warning("""
+        render_input_form(df_vdot, df_pace)
+    else:
+        render_result_page(df_vdot, df_pace, api_key)
+    
+    # フッター
+    render_footer()
+
+
+def render_input_form(df_vdot, df_pace):
+    """入力フォームを表示"""
+    # お知らせ
+    st.warning("""
 ⚠️ **ご利用にあたってのお願い**
 
 本サービスはAPI利用料の関係で、1日の生成回数に制限があります。
 より多くの方にご利用いただくため、**お一人様1日1回の利用**にご協力ください。
 """)
-        
-        # 利用規約・注意事項（折りたたみ）
-        with st.expander("📜 利用規約・注意事項（必ずお読みください）"):
-            st.markdown("""
-1. 本サービスはAIによるトレーニング計画の参考情報を提供するものであり、医療・運動指導の専門家によるアドバイスに代わるものではありません。
-
-2. 生成されるトレーニング計画の正確性・安全性を保証するものではありません。実施にあたっては、ご自身の体調や健康状態を考慮し、**自己責任**で行ってください。
-
-3. 怪我、体調不良、その他いかなる損害が生じた場合も、運営者は一切の責任を負いません。
-
-4. 持病のある方、健康に不安のある方は、事前に医師や専門家にご相談ください。
-
-5. 入力された情報はトレーニング計画の生成にのみ使用され、保存・収集されません。
-""")
-        
-        st.markdown("### 📝 あなたの情報を入力してください")
-        
-        with st.form("user_info_form"):
-            # 基本情報
-            st.markdown('<div class="form-section-title">👤 基本情報</div>', unsafe_allow_html=True)
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                name = st.text_input("ニックネーム", placeholder="例: 太郎")
-            with col2:
-                age = st.number_input("年齢", min_value=10, max_value=100, value=40)
-            with col3:
-                gender = st.selectbox("性別", ["男性", "女性", "その他"])
-            
-            st.markdown("---")
-            
-            # タイム情報
-            st.markdown('<div class="form-section-title">⏱ タイム情報</div>', unsafe_allow_html=True)
-            
-            # ベストタイム（+/- ボタン形式）
-            st.markdown("**現在のベストタイム（フルマラソン）**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                current_h = st.number_input("時間", min_value=2, max_value=6, value=3, step=1, key="current_h")
-            with col2:
-                current_m = st.number_input("分", min_value=0, max_value=59, value=30, step=1, key="current_m")
-            with col3:
-                current_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="current_s")
-            
-            # 目標タイム（+/- ボタン形式）
-            st.markdown("**目標タイム（フルマラソン）**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                target_h = st.number_input("時間", min_value=2, max_value=6, value=3, step=1, key="target_h")
-            with col2:
-                target_m = st.number_input("分", min_value=0, max_value=59, value=15, step=1, key="target_m")
-            with col3:
-                target_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="target_s")
-            
-            st.markdown("---")
-            
-            # レース情報
-            st.markdown('<div class="form-section-title">🏁 レース情報</div>', unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1:
-                race_name = st.text_input("本番レース名", placeholder="例: 東京マラソン")
-                race_date = st.date_input("本番レース日", value=datetime.now() + timedelta(days=90))
-            with col2:
-                practice_races = st.text_area("練習レース（任意）", placeholder="例: 1/11 NYハーフ\n1/18 赤羽ハーフ", height=100)
-            
-            st.markdown("---")
-            
-            # 練習情報
-            st.markdown('<div class="form-section-title">🏃‍♂️ 練習情報</div>', unsafe_allow_html=True)
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                weekly_distance = st.text_input("週間走行距離（km）", placeholder="例: 50-60")
-            with col2:
-                training_days = st.selectbox("練習可能日数/週", [1, 2, 3, 4, 5, 6, 7], index=5)
-            with col3:
-                # ポイント練習回数は練習可能日数を超えない（上限4回）
-                max_point_days = min(training_days, 4)
-                point_options = list(range(1, max_point_days + 1))
-                default_index = min(1, len(point_options) - 1)  # デフォルトは2回（可能なら）
-                point_training_days = st.selectbox("ポイント練習回数/週", point_options, index=default_index)
-            
-            concerns = st.text_area(
-                "AIコーチへの連絡事項（任意）", 
-                placeholder="例: 右膝に違和感がある、2/5は練習できない、土日セット練希望",
-                height=80
-            )
-            
-            st.markdown("---")
-            
-            # 送信ボタン
-            submitted = st.form_submit_button("🚀 トレーニング計画を作成", use_container_width=True, type="primary")
-            
-            if submitted:
-                # バリデーション
-                errors = []
-                if not name:
-                    errors.append("ニックネームを入力してください")
-                if not race_name:
-                    errors.append("本番レース名を入力してください")
-                
-                # タイムを秒に変換
-                current_seconds = current_h * 3600 + current_m * 60 + current_s
-                target_seconds = target_h * 3600 + target_m * 60 + target_s
-                
-                # タイム文字列を生成
-                current_time = f"{current_h}:{current_m:02d}:{current_s:02d}"
-                target_time = f"{target_h}:{target_m:02d}:{target_s:02d}"
-                
-                if errors:
-                    for error in errors:
-                        st.error(error)
-                else:
-                    # VDOT計算
-                    vdot_result = calculate_vdot_from_time(df_vdot, "フルマラソン", current_seconds)
-                    target_vdot_result = calculate_vdot_from_time(df_vdot, "フルマラソン", target_seconds)
-                    
-                    # VDOT差チェック
-                    if vdot_result["vdot"] and target_vdot_result["vdot"]:
-                        vdot_diff = target_vdot_result["vdot"] - vdot_result["vdot"]
-                        
-                        # VDOT差が3.0を超える場合、調整済み目標VDOTを計算
-                        original_target_vdot = target_vdot_result["vdot"]
-                        adjusted_target_vdot = None
-                        if vdot_diff > 3.0:
-                            # 現在VDOTから3.0上げた値を調整済み目標とする
-                            adjusted_target_vdot = round(vdot_result["vdot"] + 3.0, 2)
-                        
-                        # データ保存
-                        st.session_state.user_data = {
-                            "name": name,
-                            "age": age,
-                            "gender": gender,
-                            "current_time": current_time,
-                            "target_time": target_time,
-                            "race_name": race_name,
-                            "race_date": race_date.strftime("%Y-%m-%d"),
-                            "practice_races": practice_races,
-                            "weekly_distance": weekly_distance,
-                            "training_days": training_days,
-                            "point_training_days": point_training_days,
-                            "concerns": concerns,
-                            "vdot_diff": round(vdot_diff, 2),
-                            "original_target_vdot": original_target_vdot,
-                            "adjusted_target_vdot": adjusted_target_vdot
-                        }
-                        
-                        st.session_state.calculated_vdot = vdot_result
-                        st.session_state.target_vdot = target_vdot_result
-                        
-                        if vdot_result["vdot"]:
-                            pace_result = calculate_training_paces(df_pace, vdot_result["vdot"])
-                            st.session_state.training_paces = pace_result
-                        
-                        # トレーニング期間の計算（最低12週）
-                        race_dt = datetime.combine(race_date, datetime.min.time())
-                        start_date = get_training_start_date(race_dt, min_weeks=12)
-                        training_weeks = max(12, ((race_dt - start_date).days // 7) + 1)
-                        
-                        st.session_state.training_weeks = training_weeks
-                        st.session_state.start_date = start_date
-                        
-                        st.session_state.form_submitted = True
-                        st.rerun()
-        
-        # フッター（入力画面）
-        st.markdown("---")
-        st.markdown(f'<p style="text-align: center; color: #888; font-size: 0.85rem;">{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート</p>', unsafe_allow_html=True)
     
+    # 利用規約
+    render_disclaimer()
+    
+    st.markdown("### 📝 あなたの情報を入力してください")
+    
+    with st.form("user_info_form"):
+        # 基本情報
+        st.markdown('<div class="form-section-title">👤 基本情報</div>', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            name = st.text_input("ニックネーム", placeholder="例: 太郎")
+        with col2:
+            age = st.number_input("年齢", min_value=10, max_value=100, value=40)
+        with col3:
+            gender = st.selectbox("性別", ["男性", "女性", "その他"])
+        
+        st.markdown("---")
+        
+        # タイム情報
+        st.markdown('<div class="form-section-title">⏱ タイム情報</div>', unsafe_allow_html=True)
+        
+        st.markdown("**現在のベストタイム（フルマラソン）**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            current_h = st.number_input("時間", min_value=2, max_value=6, value=3, step=1, key="current_h")
+        with col2:
+            current_m = st.number_input("分", min_value=0, max_value=59, value=30, step=1, key="current_m")
+        with col3:
+            current_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="current_s")
+        
+        st.markdown("**目標タイム（フルマラソン）**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            target_h = st.number_input("時間", min_value=2, max_value=6, value=3, step=1, key="target_h")
+        with col2:
+            target_m = st.number_input("分", min_value=0, max_value=59, value=15, step=1, key="target_m")
+        with col3:
+            target_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="target_s")
+        
+        st.markdown("---")
+        
+        # レース情報
+        st.markdown('<div class="form-section-title">🏁 レース情報</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            race_name = st.text_input("本番レース名", placeholder="例: 東京マラソン")
+            race_date = st.date_input("本番レース日", value=datetime.now() + timedelta(days=90))
+        with col2:
+            practice_races = st.text_area("練習レース（任意）", placeholder="例: 1/11 NYハーフ\n1/18 赤羽ハーフ", height=100)
+        
+        st.markdown("---")
+        
+        # 練習情報
+        st.markdown('<div class="form-section-title">🏃‍♂️ 練習情報</div>', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            weekly_distance = st.text_input("週間走行距離（km）", placeholder="例: 50-60")
+        with col2:
+            training_days = st.selectbox("練習可能日数/週", [1, 2, 3, 4, 5, 6, 7], index=5)
+        with col3:
+            max_point_days = min(training_days, 4)
+            point_options = list(range(1, max_point_days + 1))
+            default_index = min(1, len(point_options) - 1)
+            point_training_days = st.selectbox("ポイント練習回数/週", point_options, index=default_index)
+        
+        concerns = st.text_area(
+            "AIコーチへの連絡事項（任意）", 
+            placeholder="例: 右膝に違和感がある、2/5は練習できない、土日セット練希望",
+            height=80
+        )
+        
+        st.markdown("---")
+        
+        # 送信ボタン
+        submitted = st.form_submit_button("🚀 トレーニング計画を作成", use_container_width=True, type="primary")
+        
+        if submitted:
+            process_form_submission(
+                name, age, gender, current_h, current_m, current_s,
+                target_h, target_m, target_s, race_name, race_date,
+                practice_races, weekly_distance, training_days,
+                point_training_days, concerns, df_vdot, df_pace
+            )
+
+
+def process_form_submission(name, age, gender, current_h, current_m, current_s,
+                           target_h, target_m, target_s, race_name, race_date,
+                           practice_races, weekly_distance, training_days,
+                           point_training_days, concerns, df_vdot, df_pace):
+    """フォーム送信を処理"""
+    # バリデーション
+    errors = []
+    if not name:
+        errors.append("ニックネームを入力してください")
+    if not race_name:
+        errors.append("本番レース名を入力してください")
+    
+    if errors:
+        for error in errors:
+            st.error(error)
+        return
+    
+    # タイムを秒に変換
+    current_seconds = current_h * 3600 + current_m * 60 + current_s
+    target_seconds = target_h * 3600 + target_m * 60 + target_s
+    
+    current_time = f"{current_h}:{current_m:02d}:{current_s:02d}"
+    target_time = f"{target_h}:{target_m:02d}:{target_s:02d}"
+    
+    # VDOT計算
+    vdot_result = calculate_vdot_from_time(df_vdot, "フルマラソン", current_seconds)
+    target_vdot_result = calculate_vdot_from_time(df_vdot, "フルマラソン", target_seconds)
+    
+    if not vdot_result["vdot"] or not target_vdot_result["vdot"]:
+        st.error("VDOT計算に失敗しました")
+        return
+    
+    vdot_diff = target_vdot_result["vdot"] - vdot_result["vdot"]
+    
+    # VDOT差が大きい場合の調整
+    original_target_vdot = target_vdot_result["vdot"]
+    adjusted_target_vdot = None
+    if vdot_diff > MAX_VDOT_DIFF_PER_CYCLE:
+        adjusted_target_vdot = round(vdot_result["vdot"] + MAX_VDOT_DIFF_PER_CYCLE, 2)
+    
+    # データ保存
+    st.session_state.user_data = {
+        "name": name,
+        "age": age,
+        "gender": gender,
+        "current_time": current_time,
+        "target_time": target_time,
+        "race_name": race_name,
+        "race_date": race_date.strftime("%Y-%m-%d"),
+        "practice_races": practice_races,
+        "weekly_distance": weekly_distance,
+        "training_days": training_days,
+        "point_training_days": point_training_days,
+        "concerns": concerns,
+        "vdot_diff": round(vdot_diff, 2),
+        "original_target_vdot": original_target_vdot,
+        "adjusted_target_vdot": adjusted_target_vdot
+    }
+    
+    st.session_state.calculated_vdot = vdot_result
+    st.session_state.target_vdot = target_vdot_result
+    
+    if vdot_result["vdot"]:
+        pace_result = calculate_training_paces(df_pace, vdot_result["vdot"])
+        st.session_state.training_paces = pace_result
+    
+    # トレーニング期間の計算
+    race_dt = datetime.combine(race_date, datetime.min.time())
+    today = datetime.now()
+    days_until_race = (race_dt - today).days
+    actual_weeks = days_until_race // 7
+    
+    # 12週未満の場合はレース日から逆算して12週前を開始日に設定
+    # 12週以上の場合は今日から開始
+    if actual_weeks < MIN_TRAINING_WEEKS:
+        training_weeks = MIN_TRAINING_WEEKS
+        # レース日から12週前の月曜日を計算
+        start_date = race_dt - timedelta(weeks=MIN_TRAINING_WEEKS)
+        # 月曜日に調整（その週の月曜日）
+        days_since_monday = start_date.weekday()
+        start_date = start_date - timedelta(days=days_since_monday)
     else:
-        # ================== 結果表示 ==================
-        user_data = st.session_state.user_data
-        vdot_info = st.session_state.calculated_vdot
-        pace_info = st.session_state.training_paces
-        target_vdot = st.session_state.target_vdot
-        paces = pace_info.get("paces", {}) if pace_info else {}
-        vdot_diff = user_data.get("vdot_diff", 0)
-        training_weeks = st.session_state.training_weeks
-        start_date = st.session_state.start_date
-        
-        # VDOT情報表示
-        target_vdot_display = ""
-        if target_vdot and target_vdot.get("vdot"):
-            target_vdot_display = f'<span style="margin-left: 2rem;">🎯 目標VDOT: <strong>{target_vdot["vdot"]}</strong></span>'
-        
-        st.markdown(f"""
-<div class="vdot-display">
-    <h3 style="margin: 0 0 1rem 0; color: white;">📊 {user_data.get('name', '')}さんのVDOT計算結果</h3>
-    <div style="font-size: 1.3rem; margin-bottom: 1rem;">
-        🏃 現在のVDOT: <strong>{vdot_info['vdot']}</strong>{target_vdot_display}
-        <span style="margin-left: 2rem;">📈 VDOT差: <strong>{vdot_diff}</strong></span>
-    </div>
-    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; text-align: center;">
-        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
-            <div style="font-size: 0.8rem;">E (Easy)</div>
-            <div style="font-weight: bold;">{paces.get('E', {}).get('display', 'N/A')}/km</div>
-        </div>
-        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
-            <div style="font-size: 0.8rem;">M (Marathon)</div>
-            <div style="font-weight: bold;">{paces.get('M', {}).get('display', 'N/A')}/km</div>
-        </div>
-        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
-            <div style="font-size: 0.8rem;">T (Threshold)</div>
-            <div style="font-weight: bold;">{paces.get('T', {}).get('display', 'N/A')}/km</div>
-        </div>
-        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
-            <div style="font-size: 0.8rem;">I (Interval)</div>
-            <div style="font-weight: bold;">{paces.get('I', {}).get('display', 'N/A')}/km</div>
-        </div>
-        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 8px;">
-            <div style="font-size: 0.8rem;">R (Repetition)</div>
-            <div style="font-weight: bold;">{paces.get('R', {}).get('display', 'N/A')}/km</div>
-        </div>
-    </div>
-</div>
-        """, unsafe_allow_html=True)
-        
-        # 調整済み目標VDOTの取得
-        adjusted_target_vdot = user_data.get("adjusted_target_vdot")
-        original_target_vdot = user_data.get("original_target_vdot")
-        
-        # 実際に使用する目標VDOT（調整済みがあればそれを使用）
-        effective_target_vdot = adjusted_target_vdot if adjusted_target_vdot else target_vdot['vdot']
-        
-        # 中間目標マラソンタイムを計算
-        adjusted_marathon_time = ""
-        if adjusted_target_vdot:
-            adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
-        
-        # 過去遡り開始の説明（別途表示用）
-        today = datetime.now()
-        is_past_start = start_date < today
-        
-        # VDOT差チェックと警告
-        if vdot_diff > 3.0 and adjusted_target_vdot:
+        training_weeks = actual_weeks
+        # 開始日は今日の次の月曜日（または今日が月曜なら今日）
+        if today.weekday() == 0:
+            start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            days_until_monday = 7 - today.weekday()
+            start_date = today + timedelta(days=days_until_monday)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    st.session_state.training_weeks = training_weeks
+    st.session_state.start_date = start_date
+    st.session_state.form_submitted = True
+    st.rerun()
+
+
+def render_result_page(df_vdot, df_pace, api_key):
+    """結果ページを表示"""
+    user_data = st.session_state.user_data
+    vdot_info = st.session_state.calculated_vdot
+    pace_info = st.session_state.training_paces
+    target_vdot = st.session_state.target_vdot
+    paces = pace_info.get("paces", {}) if pace_info else {}
+    vdot_diff = user_data.get("vdot_diff", 0)
+    training_weeks = st.session_state.training_weeks
+    start_date = st.session_state.start_date
+    
+    # ユーザー入力情報の表示
+    with st.expander("📝 入力内容を確認", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
             st.markdown(f"""
+**基本情報**
+- ニックネーム: {user_data.get('name', '-')}
+- 年齢: {user_data.get('age', '-')}歳
+- 性別: {user_data.get('gender', '-')}
+            """)
+            st.markdown(f"""
+**トレーニング条件**
+- 週間走行距離: {user_data.get('weekly_distance', '-')}km
+- 練習可能日数: {user_data.get('training_days', '-')}日/週
+- ポイント練習: {user_data.get('point_training_days', '-')}回/週
+            """)
+        with col2:
+            st.markdown(f"""
+**目標設定**
+- 現在のタイム: {user_data.get('current_time', '-')}
+- 目標タイム: {user_data.get('target_time', '-')}
+- 本番レース: {user_data.get('race_name', '-')}
+- レース日: {user_data.get('race_date', '-')}
+            """)
+            if user_data.get('practice_races'):
+                st.markdown(f"""
+**練習レース**
+{user_data.get('practice_races', 'なし')}
+                """)
+        if user_data.get('concerns'):
+            st.markdown(f"""
+**その他要望・相談事項**
+{user_data.get('concerns', 'なし')}
+            """)
+    
+    # VDOT表示
+    render_vdot_display(
+        user_data.get('name', ''),
+        vdot_info,
+        target_vdot,
+        paces,
+        vdot_diff
+    )
+    
+    # 調整済み目標VDOTの取得
+    adjusted_target_vdot = user_data.get("adjusted_target_vdot")
+    original_target_vdot = user_data.get("original_target_vdot")
+    effective_target_vdot = adjusted_target_vdot if adjusted_target_vdot else target_vdot['vdot']
+    
+    # VDOT差チェックと警告/確認
+    if vdot_diff > MAX_VDOT_DIFF_PER_CYCLE and adjusted_target_vdot:
+        adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
+        st.markdown(f"""
 <div class="warning-box">
     <h4>⚠️ 目標タイムについての重要なお知らせ</h4>
-    <p>現在のVDOT（<strong>{vdot_info['vdot']}</strong>）と入力された目標VDOT（<strong>{original_target_vdot}</strong>）の差が <strong>{vdot_diff}</strong> あります。</p>
+    <p>現在のVDOT（{vdot_info['vdot']}）と入力された目標VDOT（{original_target_vdot}）の差が<strong>{vdot_diff}</strong>あります。</p>
     <p>VDOT差が3.0を超える場合、1つのトレーニングサイクル（約12〜16週間）で達成するのは難しい可能性があります。</p>
-    <div style="border-top: 1px solid #FFB74D; margin-top: 1rem; padding-top: 1rem;">
     <h4>📊 今回のトレーニング計画について</h4>
     <p>そこで、今回のトレーニング計画では<strong>中間目標</strong>を設定します：</p>
     <ul>
-        <li><strong>中間目標VDOT: {adjusted_target_vdot}</strong>（VDOT差 3.0）</li>
-        <li><strong>中間目標マラソンタイム: {adjusted_marathon_time}</strong></li>
+        <li><strong>中間目標VDOT:</strong> {adjusted_target_vdot}（VDOT差 3.0）</li>
+        <li><strong>中間目標マラソンタイム:</strong> {adjusted_marathon_time}</li>
     </ul>
     <p>この中間目標を達成した後、次のトレーニングサイクルで最終目標（VDOT {original_target_vdot} / {user_data.get('target_time', '')}）を目指すことをお勧めします。</p>
     <p><strong>段階的なアプローチ</strong>により、怪我のリスクを減らし、着実にタイムを縮めていくことができます。</p>
-    </div>
 </div>
-            """, unsafe_allow_html=True)
-        elif vdot_diff > 3.0:
-            st.markdown(f"""
-<div class="warning-box">
-    <h4>⚠️ 目標タイムについてのアドバイス</h4>
-    <p>現在のVDOT（{vdot_info['vdot']}）と目標VDOT（{target_vdot['vdot']}）の差が <strong>{vdot_diff}</strong> あります。</p>
-    <p>VDOT差が3.0を超える場合、1つのトレーニングサイクル（約12〜16週間）で達成するのは難しい可能性があります。</p>
-    <p><strong>推奨:</strong> まずは中間目標（VDOT差1.5〜2.0程度）を設定し、段階的にタイムを縮めていくことをお勧めします。</p>
-</div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
+        """, unsafe_allow_html=True)
+    else:
+        # 目標設定が適切な場合
+        st.markdown(f"""
 <div class="success-box">
     <h4>✅ 目標設定は適切です</h4>
     <p>VDOT差 <strong>{vdot_diff}</strong> は、{training_weeks}週間のトレーニングで十分達成可能な範囲です。</p>
 </div>
-            """, unsafe_allow_html=True)
-        
-        # 過去遡り開始の説明（VDOT差に関係なく独立して表示）
-        if is_past_start:
-            st.markdown(f"""
-<div class="warning-box">
-    <h4>📅 トレーニング開始日について</h4>
-    <p>本プログラムの仕様として、<strong>最低12週間</strong>のトレーニング期間を確保しています。</p>
-    <p>レース日までの期間が12週間に満たないため、トレーニング開始日を <strong>{start_date.strftime('%Y/%m/%d')}（過去の日付）</strong> に設定しています。</p>
-    <p>実際には本日から計画を参考にして、残りの期間でできる限りのトレーニングを行ってください。</p>
-</div>
-            """, unsafe_allow_html=True)
-        
-        # VDOT解説
-        st.markdown("""
-<div class="vdot-explanation">
-    <h4>📖 VDOTとは</h4>
-    <p>VDOTは、ジャック・ダニエルズ博士が考案した走力指標です。現在のタイムから算出され、適切なトレーニングペースを導き出すことができます。</p>
-    <ul>
-        <li><strong>E (Easy)</strong>: 会話ができる楽なペース。全体の70-80%をこのペースで。</li>
-        <li><strong>M (Marathon)</strong>: フルマラソンの目標ペース。</li>
-        <li><strong>T (Threshold)</strong>: 乳酸閾値ペース。20〜30分維持できる強度。</li>
-        <li><strong>I (Interval)</strong>: インターバルペース。3〜5分維持できる強度。</li>
-        <li><strong>R (Repetition)</strong>: 反復ペース。短い距離のスピード練習用。</li>
-    </ul>
-</div>
         """, unsafe_allow_html=True)
-        
-        with st.expander("📐 VDOT計算過程を確認"):
-            st.code(vdot_info.get("calculation_log", "計算ログなし"))
-            if pace_info and pace_info.get("calculation_log"):
-                st.code(pace_info.get("calculation_log", ""))
-        
-        # フェーズ説明（調整済み目標VDOTを使用）
-        phase_vdots = calculate_phase_vdots(vdot_info['vdot'], effective_target_vdot, 4)
-        weeks_per_phase = training_weeks // 4
-        
+    
+    # トレーニング期間の警告（12週未満の場合のみ）
+    today = datetime.now()
+    days_until_race = (datetime.strptime(user_data.get("race_date", ""), "%Y-%m-%d") - today).days
+    weeks_until_race = days_until_race // 7
+    
+    if weeks_until_race < MIN_TRAINING_WEEKS:
         st.markdown(f"""
-<div class="phase-explanation">
-    <h4>📈 4フェーズ構成（全{training_weeks}週間）</h4>
-    <table style="width: 100%; border-collapse: collapse;">
-        <tr style="background-color: #E3F2FD;">
-            <th style="padding: 8px; text-align: left;">フェーズ</th>
-            <th style="padding: 8px; text-align: left;">期間</th>
-            <th style="padding: 8px; text-align: left;">目標VDOT</th>
-            <th style="padding: 8px; text-align: left;">主な目的</th>
-        </tr>
-        <tr>
-            <td style="padding: 8px;">フェーズ1（基礎構築期）</td>
-            <td style="padding: 8px;">第1〜{weeks_per_phase}週</td>
-            <td style="padding: 8px;">{phase_vdots[0]}</td>
-            <td style="padding: 8px;">基礎体力の構築</td>
-        </tr>
-        <tr style="background-color: #F5F5F5;">
-            <td style="padding: 8px;">フェーズ2（強化期）</td>
-            <td style="padding: 8px;">第{weeks_per_phase+1}〜{weeks_per_phase*2}週</td>
-            <td style="padding: 8px;">{phase_vdots[1]}</td>
-            <td style="padding: 8px;">持久力・スピードの強化</td>
-        </tr>
-        <tr>
-            <td style="padding: 8px;">フェーズ3（実践期）</td>
-            <td style="padding: 8px;">第{weeks_per_phase*2+1}〜{weeks_per_phase*3}週</td>
-            <td style="padding: 8px;">{phase_vdots[2]}</td>
-            <td style="padding: 8px;">レースペースへの適応</td>
-        </tr>
-        <tr style="background-color: #F5F5F5;">
-            <td style="padding: 8px;">フェーズ4（調整期）</td>
-            <td style="padding: 8px;">第{weeks_per_phase*3+1}〜{training_weeks}週</td>
-            <td style="padding: 8px;">{phase_vdots[3]}</td>
-            <td style="padding: 8px;">テーパリング・最終調整</td>
-        </tr>
-    </table>
+<div class="warning-box">
+    <h4>📅 トレーニング期間について</h4>
+    <p>レース日までの期間が<strong>{weeks_until_race}週間</strong>と、推奨される最低{MIN_TRAINING_WEEKS}週間に満たないため、{MIN_TRAINING_WEEKS}週間のトレーニング計画を生成しました。</p>
+    <p>計画上の開始日は<strong>{start_date.strftime('%Y/%m/%d')}（過去の日付）</strong>になっています。</p>
+    <p>実際には<strong>本日から計画を参考に</strong>して、残りの{weeks_until_race}週間でできる限りのトレーニングを行ってください。過去の週のメニューは飛ばして、現在の週から始めてください。</p>
 </div>
         """, unsafe_allow_html=True)
-        
-        # トレーニング計画生成
-        if not st.session_state.training_plan:
-            with st.spinner("🏃 トレーニング計画を作成中...（1〜2分程度かかります）"):
-                try:
-                    model = get_gemini_model()
-                    if model:
-                        # 調整済み目標VDOTを使用（あれば）
-                        effective_target_vdot_for_prompt = {
-                            "vdot": effective_target_vdot
-                        }
-                        prompt = create_training_prompt(
-                            user_data, vdot_info, pace_info, effective_target_vdot_for_prompt, 
-                            df_pace, training_weeks, start_date, df_vdot
-                        )
-                        response = model.generate_content(prompt)
-                        # HTMLタグを除去
-                        st.session_state.training_plan = sanitize_gemini_output(response.text)
-                except Exception as e:
-                    st.error(f"APIエラーが発生しました: {str(e)}")
-                    st.session_state.training_plan = None
-        
-        # トレーニング計画表示
-        if st.session_state.training_plan:
-            st.markdown("---")
-            st.markdown("## 📋 トレーニング計画")
-            st.markdown(st.session_state.training_plan)
-            
-            # ダウンロードボタン
-            st.markdown("---")
-            
-            md_content = st.session_state.training_plan
-            md_bytes = create_md_download(md_content)
-            filename = f"training_plan_{user_data.get('name', 'user')}_{datetime.now().strftime('%Y%m%d')}.md"
-            
-            st.download_button(
-                label="📥 週間トレーニング計画をダウンロード",
-                data=md_bytes,
-                file_name=filename,
-                mime="text/markdown",
-                use_container_width=True
-            )
-        
-        # フッター（結果画面）
+
+    
+    # VDOT解説
+    render_vdot_explanation()
+    
+    # 計算過程
+    with st.expander("📐 VDOT計算過程を確認"):
+        st.code(vdot_info.get("calculation_log", "計算ログなし"))
+        if pace_info and pace_info.get("calculation_log"):
+            st.code(pace_info.get("calculation_log", ""))
+    
+    # フェーズテーブル
+    render_phase_table(vdot_info['vdot'], effective_target_vdot, training_weeks)
+    
+    # トレーニング計画生成
+    if not st.session_state.training_plan:
+        with st.spinner("🏃 トレーニング計画を作成中...（1〜2分程度かかります）"):
+            try:
+                client = GeminiClient(api_key)
+                effective_target_vdot_for_prompt = {"vdot": effective_target_vdot}
+                prompt = create_training_prompt(
+                    user_data, vdot_info, pace_info, effective_target_vdot_for_prompt,
+                    df_pace, training_weeks, start_date, df_vdot
+                )
+                response = client.generate_content(prompt)
+                st.session_state.training_plan = sanitize_gemini_output(response)
+            except Exception as e:
+                st.error(f"APIエラーが発生しました: {str(e)}")
+                st.session_state.training_plan = None
+    
+    # トレーニング計画表示
+    if st.session_state.training_plan:
         st.markdown("---")
-        st.markdown(f'<p style="text-align: center; color: #888; font-size: 0.85rem;">{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート</p>', unsafe_allow_html=True)
+        st.markdown("## 📋 トレーニング計画")
+        st.markdown(st.session_state.training_plan)
+        
+        # ダウンロードボタン
+        st.markdown("---")
+        
+        md_content = st.session_state.training_plan
+        md_bytes = create_md_download(md_content)
+        filename = f"training_plan_{user_data.get('name', 'user')}_{datetime.now().strftime('%Y%m%d')}.md"
+        
+        st.download_button(
+            label="📥 週間トレーニング計画をダウンロード",
+            data=md_bytes,
+            file_name=filename,
+            mime="text/markdown",
+            use_container_width=True
+        )
 
 
 if __name__ == "__main__":
