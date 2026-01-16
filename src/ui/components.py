@@ -36,11 +36,23 @@ def render_header() -> None:
 
 
 def render_footer() -> None:
-    """フッターを表示"""
+    """フッターを表示（開発者情報・ブログリンク含む）"""
     st.markdown("---")
+    
+    # 開発者情報（縦並び・中央揃え）
+    st.markdown("""
+<div style="text-align: center;">
+    <p><strong>👤 開発者: あきら</strong><br>🏃 フルマラソンPB 2:46:27（56歳）</p>
+    <p>
+        📝 <a href="https://akirun.net/" target="_blank">AkiRun｜走りを科学でアップデート</a><br>
+        📖 <a href="https://akirun.net/ai-marathon-coach-guide/" target="_blank">AIマラソンコーチの使い方</a>
+    </p>
+</div>
+    """, unsafe_allow_html=True)
+    
     st.markdown(
-        f'<p style="text-align: center; color: #888; font-size: 0.85rem;">'
-        f'{APP_NAME} v{APP_VERSION} | © 2025 AkiRun｜走りを科学でアップデート</p>',
+        f'<p style="text-align: center; color: #888; font-size: 0.85rem; margin-top: 1rem;">'
+        f'{APP_NAME} v{APP_VERSION} | © 2025 AkiRun</p>',
         unsafe_allow_html=True
     )
 

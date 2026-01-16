@@ -158,4 +158,16 @@ python3 -m pytest tests/ -v
 
 ---
 
+## 🚀 ローカル開発
+
+### 起動コマンド
+```bash
+cd /Users/yasuchin/apps/ai-marathon-coach/ai-marathon-coach
+python3 -m streamlit run app.py
+```
+
+ブラウザで http://localhost:8501 にアクセス。
+
+---
+
 *AIマラソンコーチ v1.0.0*

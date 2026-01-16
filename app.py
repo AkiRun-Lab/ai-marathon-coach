@@ -107,9 +107,33 @@ def main():
 
 def render_input_form(df_vdot, df_pace):
     """入力フォームを表示"""
+    
+    # 3ステップフロー（ファーストビュー改善）
+    st.markdown("""
+<div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0 2rem 0;">
+    <div style="background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%); padding: 1rem 1.5rem; border-radius: 12px; text-align: center; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <div style="font-size: 2rem;">📝</div>
+        <div style="font-weight: bold; color: white; margin: 0.5rem 0;">STEP 1</div>
+        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">あなたの情報を入力</div>
+    </div>
+    <div style="display: flex; align-items: center; color: #1E88E5; font-size: 1.5rem;">→</div>
+    <div style="background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%); padding: 1rem 1.5rem; border-radius: 12px; text-align: center; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <div style="font-size: 2rem;">🤖</div>
+        <div style="font-weight: bold; color: white; margin: 0.5rem 0;">STEP 2</div>
+        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">AIがダニエルズ理論で分析</div>
+    </div>
+    <div style="display: flex; align-items: center; color: #43A047; font-size: 1.5rem;">→</div>
+    <div style="background: linear-gradient(135deg, #FB8C00 0%, #EF6C00 100%); padding: 1rem 1.5rem; border-radius: 12px; text-align: center; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <div style="font-size: 2rem;">📋</div>
+        <div style="font-weight: bold; color: white; margin: 0.5rem 0;">STEP 3</div>
+        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">12週間の詳細な計画を取得！</div>
+    </div>
+</div>
+    """, unsafe_allow_html=True)
+    
     # お知らせ
-    st.warning("""
-⚠️ **ご利用にあたってのお願い**
+    st.info("""
+ℹ️ **ご利用にあたってのお願い**
 
 本サービスはAPI利用料の関係で、1日の生成回数に制限があります。
 より多くの方にご利用いただくため、**お一人様1日1回の利用**にご協力ください。
@@ -165,7 +189,8 @@ def render_input_form(df_vdot, df_pace):
         st.markdown('<div class="form-section-title">👤 基本情報</div>', unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3)
         with col1:
-            name = st.text_input("ニックネーム", placeholder="例: 太郎")
+            st.markdown('ニックネーム <span style="background-color: #E53935; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 4px;">必須</span>', unsafe_allow_html=True)
+            name = st.text_input("ニックネーム", placeholder="例: 太郎", label_visibility="collapsed")
         with col2:
             age = st.number_input("年齢", min_value=10, max_value=100, value=40)
         with col3:
@@ -179,9 +204,9 @@ def render_input_form(df_vdot, df_pace):
         st.markdown("**現在のベストタイム（フルマラソン）**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            current_h = st.number_input("時間", min_value=2, max_value=6, value=3, step=1, key="current_h")
+            current_h = st.number_input("時間", min_value=2, max_value=6, value=4, step=1, key="current_h")
         with col2:
-            current_m = st.number_input("分", min_value=0, max_value=59, value=30, step=1, key="current_m")
+            current_m = st.number_input("分", min_value=0, max_value=59, value=0, step=1, key="current_m")
         with col3:
             current_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="current_s")
         
@@ -190,7 +215,7 @@ def render_input_form(df_vdot, df_pace):
         with col1:
             target_h = st.number_input("時間", min_value=2, max_value=6, value=3, step=1, key="target_h")
         with col2:
-            target_m = st.number_input("分", min_value=0, max_value=59, value=15, step=1, key="target_m")
+            target_m = st.number_input("分", min_value=0, max_value=59, value=30, step=1, key="target_m")
         with col3:
             target_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="target_s")
         
@@ -200,10 +225,12 @@ def render_input_form(df_vdot, df_pace):
         st.markdown('<div class="form-section-title">🏁 レース情報</div>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         with col1:
-            race_name = st.text_input("本番レース名", placeholder="例: 東京マラソン")
+            st.markdown('本番レース名 <span style="background-color: #E53935; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 4px;">必須</span>', unsafe_allow_html=True)
+            race_name = st.text_input("本番レース名", placeholder="例: 東京マラソン", label_visibility="collapsed")
             race_date = st.date_input("本番レース日", value=datetime.now() + timedelta(days=90))
         with col2:
-            practice_races = st.text_area("練習レース（任意）", placeholder="例: 1/11 NYハーフ\n1/18 赤羽ハーフ", height=100)
+            st.markdown('練習レース <span style="background-color: #1976D2; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 4px;">任意</span>', unsafe_allow_html=True)
+            practice_races = st.text_area("練習レース", placeholder="例: 1/11 NYハーフ\n1/18 赤羽ハーフ", height=100, label_visibility="collapsed")
         
         st.markdown("---")
         
@@ -220,10 +247,12 @@ def render_input_form(df_vdot, df_pace):
             default_index = min(1, len(point_options) - 1)
             point_training_days = st.selectbox("ポイント練習回数/週", point_options, index=default_index)
         
+        st.markdown('AIコーチへの連絡事項 <span style="background-color: #1976D2; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 4px;">任意</span>', unsafe_allow_html=True)
         concerns = st.text_area(
-            "AIコーチへの連絡事項（任意）", 
+            "AIコーチへの連絡事項", 
             placeholder="例: 右膝に違和感がある、2/5は練習できない、土日セット練希望",
-            height=80
+            height=80,
+            label_visibility="collapsed"
         )
         
         st.markdown("---")
@@ -253,8 +282,9 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
         errors.append("本番レース名を入力してください")
     
     if errors:
+        st.toast("必須項目が未入力です", icon="⚠️")
         for error in errors:
-            st.error(error)
+            st.error(f"❌ {error}")
         return
     
     # タイムを秒に変換
@@ -508,6 +538,7 @@ def render_result_page(df_vdot, df_pace, api_key):
     
     # トレーニング計画生成
     if not st.session_state.training_plan:
+        st.toast("🏃 トレーニング計画を作成中です。1〜2分お待ちください...", icon="🏃")
         with st.spinner("🏃 トレーニング計画を作成中...（1〜2分程度かかります）"):
             try:
                 client = GeminiClient(api_key)
