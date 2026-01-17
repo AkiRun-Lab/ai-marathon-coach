@@ -110,34 +110,33 @@ def render_input_form(df_vdot, df_pace):
     
     # 3ステップフロー（ファーストビュー改善）
     st.markdown("""
-<div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0 2rem 0;">
-    <div style="background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%); padding: 1rem 1.5rem; border-radius: 12px; text-align: center; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-        <div style="font-size: 2rem;">📝</div>
-        <div style="font-weight: bold; color: white; margin: 0.5rem 0;">STEP 1</div>
-        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">あなたの情報を入力</div>
+<div style="display: flex; justify-content: center; gap: clamp(0.3rem, 1vw, 0.8rem); flex-wrap: nowrap; margin: 1rem 0 1.5rem 0;">
+    <div style="background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%); padding: clamp(0.5rem, 1.5vw, 1rem) clamp(0.6rem, 2vw, 1.5rem); border-radius: 10px; text-align: center; min-width: 70px; flex: 1; max-width: 150px; box-shadow: 0 3px 8px rgba(0,0,0,0.15);">
+        <div style="font-size: clamp(1.2rem, 3vw, 2rem);">📝</div>
+        <div style="font-weight: bold; color: white; font-size: clamp(0.9rem, 2vw, 1.2rem); margin: 0.3rem 0;">STEP 1</div>
+        <div style="font-size: clamp(0.8rem, 1.5vw, 1rem); color: rgba(255,255,255,0.9);">情報を入力</div>
     </div>
-    <div style="display: flex; align-items: center; color: #1E88E5; font-size: 1.5rem;">→</div>
-    <div style="background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%); padding: 1rem 1.5rem; border-radius: 12px; text-align: center; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-        <div style="font-size: 2rem;">🤖</div>
-        <div style="font-weight: bold; color: white; margin: 0.5rem 0;">STEP 2</div>
-        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">AIがダニエルズ理論で分析</div>
+    <div style="display: flex; align-items: center; color: #1E88E5; font-size: clamp(1.6rem, 3vw, 2.5rem);">→</div>
+    <div style="background: linear-gradient(135deg, #43A047 0%, #2E7D32 100%); padding: clamp(0.5rem, 1.5vw, 1rem) clamp(0.6rem, 2vw, 1.5rem); border-radius: 10px; text-align: center; min-width: 70px; flex: 1; max-width: 150px; box-shadow: 0 3px 8px rgba(0,0,0,0.15);">
+        <div style="font-size: clamp(1.2rem, 3vw, 2rem);">🤖</div>
+        <div style="font-weight: bold; color: white; font-size: clamp(0.9rem, 2vw, 1.2rem); margin: 0.3rem 0;">STEP 2</div>
+        <div style="font-size: clamp(0.8rem, 1.5vw, 1rem); color: rgba(255,255,255,0.9);">AIが分析</div>
     </div>
-    <div style="display: flex; align-items: center; color: #43A047; font-size: 1.5rem;">→</div>
-    <div style="background: linear-gradient(135deg, #FB8C00 0%, #EF6C00 100%); padding: 1rem 1.5rem; border-radius: 12px; text-align: center; min-width: 160px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-        <div style="font-size: 2rem;">📋</div>
-        <div style="font-weight: bold; color: white; margin: 0.5rem 0;">STEP 3</div>
-        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">12週間の詳細な計画を取得！</div>
+    <div style="display: flex; align-items: center; color: #43A047; font-size: clamp(1.6rem, 3vw, 2.5rem);">→</div>
+    <div style="background: linear-gradient(135deg, #FB8C00 0%, #EF6C00 100%); padding: clamp(0.5rem, 1.5vw, 1rem) clamp(0.6rem, 2vw, 1.5rem); border-radius: 10px; text-align: center; min-width: 70px; flex: 1; max-width: 150px; box-shadow: 0 3px 8px rgba(0,0,0,0.15);">
+        <div style="font-size: clamp(1.2rem, 3vw, 2rem);">📋</div>
+        <div style="font-weight: bold; color: white; font-size: clamp(0.9rem, 2vw, 1.2rem); margin: 0.3rem 0;">STEP 3</div>
+        <div style="font-size: clamp(0.8rem, 1.5vw, 1rem); color: rgba(255,255,255,0.9);">計画を取得！</div>
     </div>
 </div>
     """, unsafe_allow_html=True)
     
-    # お知らせ
-    st.info("""
-ℹ️ **ご利用にあたってのお願い**
-
-本サービスはAPI利用料の関係で、1日の生成回数に制限があります。
+    # お知らせ（折りたたみ）
+    with st.expander("📋 ご利用にあたってのお願い", expanded=False):
+        st.markdown("""
+本サービスはAPI利用料の関係で、1日の生成回数に制限があります。  
 より多くの方にご利用いただくため、**お一人様1日1回の利用**にご協力ください。
-""")
+        """)
     
     # ユーザーマニュアル
     with st.expander("📖 使い方・用語説明", expanded=False):

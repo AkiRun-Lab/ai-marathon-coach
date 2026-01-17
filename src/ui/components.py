@@ -39,6 +39,16 @@ def render_footer() -> None:
     """フッターを表示（開発者情報・ブログリンク含む）"""
     st.markdown("---")
     
+    # 更新履歴（CHANGELOG.mdから読み込み）
+    with st.expander("📋 更新履歴", expanded=False):
+        changelog_path = os.path.join(os.path.dirname(__file__), "../../CHANGELOG.md")
+        try:
+            with open(changelog_path, "r", encoding="utf-8") as f:
+                changelog_content = f.read()
+            st.markdown(changelog_content)
+        except FileNotFoundError:
+            st.markdown("更新履歴ファイルが見つかりません。")
+    
     # 開発者情報（縦並び・中央揃え）
     st.markdown("""
 <div style="text-align: center;">
