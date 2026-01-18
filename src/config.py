@@ -12,12 +12,19 @@ APP_VERSION = "1.2.0"
 # =============================================
 # Gemini API 設定
 # =============================================
+# =============================================
+# Gemini API 設定
+# =============================================
 GEMINI_MODEL_NAME = "gemini-3-flash-preview"
 
 # Generation config
-GEMINI_TEMPERATURE = 0.7
+GEMINI_TEMPERATURE = 1.0  # 思考モード推奨値
 GEMINI_TOP_P = 0.95
 GEMINI_MAX_OUTPUT_TOKENS = 32768
+
+# Thinking config
+GEMINI_THINKING_LEVEL = "HIGH"
+GEMINI_INCLUDE_THOUGHTS = True
 
 # =============================================
 # トレーニング設定

@@ -18,6 +18,8 @@ from ..config import (
     GEMINI_TOP_P,
     GEMINI_MAX_OUTPUT_TOKENS,
     NUM_PHASES,
+    GEMINI_THINKING_LEVEL,
+    GEMINI_INCLUDE_THOUGHTS,
 )
 from ..vdot import (
     calculate_training_paces,
@@ -54,6 +56,9 @@ class GeminiClient:
                     temperature=GEMINI_TEMPERATURE,
                     top_p=GEMINI_TOP_P,
                     max_output_tokens=GEMINI_MAX_OUTPUT_TOKENS,
+                    thinking_config=types.ThinkingConfig(
+                        include_thoughts=GEMINI_INCLUDE_THOUGHTS,
+                    ) if GEMINI_INCLUDE_THOUGHTS else None,
                 ),
             )
             return response.text
@@ -229,6 +234,12 @@ def create_training_prompt(
     
     prompt = f"""# Role
 あなたは「AIマラソンコーチ」です。ジャック・ダニエルズ博士の「ランニング・フォーミュラ」を熟知し、科学的根拠に基づいたトレーニング計画を提案します。
+
+【重要】出力を作成する前に深く思考し、全体の整合性を確認してください。
+特に、以下の点を厳重にチェックし、矛盾があれば修正してから出力してください：
+1. 長期的な負荷の漸進性：急激な距離や強度の増加がないか。
+2. 目標との整合性：中間目標や最終目標と、設定されたペース・距離が矛盾していないか。
+3. 文脈の統一：導入文やアドバイスで述べた内容と、実際のメニュースケジュールが食い違っていないか。
 
 # ユーザー情報
 - ニックネーム: {user_data.get('name', '不明')}
