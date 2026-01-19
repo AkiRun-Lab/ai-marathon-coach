@@ -108,6 +108,25 @@ def main():
 def render_input_form(df_vdot, df_pace):
     """入力フォームを表示"""
     
+    # URLパラメータから初期値を取得（AMC連携）
+    # ?best_h=4&best_m=0&best_s=0&target_h=3&target_m=30&target_s=0
+    query_params = st.query_params
+    
+    def get_param(key, default):
+        try:
+            return int(query_params.get(key, default))
+        except (ValueError, TypeError):
+            return default
+
+    # デフォルト設定（パラメータがない場合はこの値）
+    default_best_h = get_param("best_h", 4)
+    default_best_m = get_param("best_m", 0)
+    default_best_s = get_param("best_s", 0)
+    
+    default_target_h = get_param("target_h", 3)
+    default_target_m = get_param("target_m", 30)
+    default_target_s = get_param("target_s", 0)
+
     # 3ステップフロー（ファーストビュー改善）
     st.markdown("""
 <div style="display: flex; justify-content: center; gap: clamp(0.3rem, 1vw, 0.8rem); flex-wrap: nowrap; margin: 1rem 0 1.5rem 0;">
@@ -203,20 +222,20 @@ def render_input_form(df_vdot, df_pace):
         st.markdown("**現在のベストタイム（フルマラソン）**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            current_h = st.number_input("時間", min_value=2, max_value=6, value=4, step=1, key="current_h")
+            current_h = st.number_input("時間", min_value=2, max_value=6, value=default_best_h, step=1, key="current_h")
         with col2:
-            current_m = st.number_input("分", min_value=0, max_value=59, value=0, step=1, key="current_m")
+            current_m = st.number_input("分", min_value=0, max_value=59, value=default_best_m, step=1, key="current_m")
         with col3:
-            current_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="current_s")
+            current_s = st.number_input("秒", min_value=0, max_value=59, value=default_best_s, step=1, key="current_s")
         
         st.markdown("**目標タイム（フルマラソン）**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            target_h = st.number_input("時間", min_value=2, max_value=6, value=3, step=1, key="target_h")
+            target_h = st.number_input("時間", min_value=2, max_value=6, value=default_target_h, step=1, key="target_h")
         with col2:
-            target_m = st.number_input("分", min_value=0, max_value=59, value=30, step=1, key="target_m")
+            target_m = st.number_input("分", min_value=0, max_value=59, value=default_target_m, step=1, key="target_m")
         with col3:
-            target_s = st.number_input("秒", min_value=0, max_value=59, value=0, step=1, key="target_s")
+            target_s = st.number_input("秒", min_value=0, max_value=59, value=default_target_s, step=1, key="target_s")
         
         st.markdown("---")
         
