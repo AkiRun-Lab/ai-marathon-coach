@@ -6,6 +6,7 @@ Version: 1.0.0
 """
 
 import streamlit as st
+import time
 from datetime import datetime, timedelta
 
 # ローカルモジュール
@@ -575,14 +576,35 @@ def render_result_page(df_vdot, df_pace, api_key):
                     user_data, vdot_info, pace_info, effective_target_vdot_for_prompt,
                     df_pace, training_weeks, start_date, df_vdot
                 )
-                response = client.generate_content(prompt)
-                if response:
-                    st.session_state.training_plan = sanitize_gemini_output(response)
-                else:
-                    st.error("⚠️ AIからの応答が空でした。お手数ですが、ブラウザを更新して再度お試しください。")
-                    st.session_state.training_plan = None
+                
+                # 自動リトライ機構（最大2回リトライ＝計3回試行）
+                MAX_RETRIES = 2
+                for attempt in range(MAX_RETRIES + 1):
+                    try:
+                        response = client.generate_content(prompt)
+                        if response:
+                            st.session_state.training_plan = sanitize_gemini_output(response)
+                            break
+                        else:
+                            # 応答が空の場合
+                            if attempt < MAX_RETRIES:
+                                time.sleep(1)
+                                continue
+                            else:
+                                st.error("⚠️ AIからの応答が空でした。混雑している可能性があります。時間をおいて再試行してください。")
+                                st.session_state.training_plan = None
+                    except Exception as e:
+                        # APIエラー発生時
+                        if attempt < MAX_RETRIES:
+                            time.sleep(1)
+                            continue
+                        else:
+                            st.error(f"APIエラーが発生しました（{MAX_RETRIES+1}回試行）: {str(e)}")
+                            st.session_state.training_plan = None
+
             except Exception as e:
-                st.error(f"APIエラーが発生しました: {str(e)}")
+                # その他の予期せぬエラー
+                st.error(f"処理中にエラーが発生しました: {str(e)}")
                 st.session_state.training_plan = None
     
     # トレーニング計画表示
