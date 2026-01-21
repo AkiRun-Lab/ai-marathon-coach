@@ -112,9 +112,19 @@ def render_input_form(df_vdot, df_pace):
     # ?best_h=4&best_m=0&best_s=0&target_h=3&target_m=30&target_s=0
     query_params = st.query_params
     
+    # デバッグ用：パラメータ表示（本番では削除またはコメントアウト）
+    # with st.expander("Debug: URL Parameters"):
+    #     st.write(query_params)
+
     def get_param(key, default):
         try:
-            return int(query_params.get(key, default))
+            val = query_params.get(key)
+            if val is None:
+                return default
+            # リスト（古いバージョンや複数指定）の場合の対応
+            if isinstance(val, list):
+                val = val[0]
+            return int(val)
         except (ValueError, TypeError):
             return default
 
@@ -126,7 +136,7 @@ def render_input_form(df_vdot, df_pace):
     default_target_h = get_param("target_h", 3)
     default_target_m = get_param("target_m", 30)
     default_target_s = get_param("target_s", 0)
-
+    
     # 3ステップフロー（ファーストビュー改善）
     st.markdown("""
 <div style="display: flex; justify-content: center; gap: clamp(0.3rem, 1vw, 0.8rem); flex-wrap: nowrap; margin: 1rem 0 1.5rem 0;">
@@ -566,7 +576,11 @@ def render_result_page(df_vdot, df_pace, api_key):
                     df_pace, training_weeks, start_date, df_vdot
                 )
                 response = client.generate_content(prompt)
-                st.session_state.training_plan = sanitize_gemini_output(response)
+                if response:
+                    st.session_state.training_plan = sanitize_gemini_output(response)
+                else:
+                    st.error("⚠️ AIからの応答が空でした。お手数ですが、ブラウザを更新して再度お試しください。")
+                    st.session_state.training_plan = None
             except Exception as e:
                 st.error(f"APIエラーが発生しました: {str(e)}")
                 st.session_state.training_plan = None

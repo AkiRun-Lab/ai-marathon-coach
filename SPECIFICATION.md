@@ -190,3 +190,8 @@ VDOT計算機などの外部ツールから、クエリパラメータ経由で�
 **使用例:**
 `https://app-url/?best_h=3&best_m=30&target_h=3&target_m=0`
 （未指定のパラメータはデフォルト値が使用されます）
+
+### 4.2 iframe埋め込み時の注意
+`akirun.net` 等の親ページにiframeで埋め込む場合、親ページのURLパラメータは自動的にiframeに引き継がれません。
+親ページ側でJavaScriptを使用してパラメータをiframeのsrcに転送する実装が必要です。
+詳細: **LP (akirun.net) 用パラメータ転送実装ガイド** を参照してください。

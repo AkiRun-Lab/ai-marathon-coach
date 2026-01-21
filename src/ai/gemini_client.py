@@ -75,6 +75,10 @@ def sanitize_gemini_output(content: str) -> str:
     Returns:
         HTMLタグを除去したテキスト
     """
+    # None または空文字列の場合は早期リターン
+    if not content:
+        return ""
+    
     lines = content.split('\n')
     cleaned_lines = []
     
