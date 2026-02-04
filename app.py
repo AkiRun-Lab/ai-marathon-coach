@@ -611,7 +611,44 @@ def render_result_page(df_vdot, df_pace, api_key):
     if st.session_state.training_plan:
         st.markdown("---")
         st.markdown("## 📋 トレーニング計画")
+        
+        # 案3: 計画の上にヒント表示
+        st.markdown("""
+        <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 1rem;">
+            💡 ヒント: このプランを効果的に実践するための<a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="color: #00E5FF;">おすすめギアはこちら</a>
+        </p>
+        """, unsafe_allow_html=True)
+        
         st.markdown(st.session_state.training_plan)
+        
+        # 案1: アフィリエイトCTAボックス
+        st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, #1E3A5F 0%, #0F172A 100%);
+            border: 1px solid #00E5FF;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: center;
+        ">
+            <p style="color: #00E5FF; font-size: 1.1rem; margin-bottom: 0.5rem;">
+                📚 トレーニング効率を最大化するギア
+            </p>
+            <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 1rem;">
+                科学的根拠に基づいて厳選したランニングギアを紹介しています
+            </p>
+            <a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="
+                display: inline-block;
+                background: linear-gradient(135deg, #00E5FF 0%, #0EA5E9 100%);
+                color: #0F172A;
+                padding: 0.75rem 2rem;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: bold;
+                font-size: 1rem;
+            ">🛒 厳選ギアを見る →</a>
+        </div>
+        """, unsafe_allow_html=True)
         
         # ダウンロードボタン
         st.markdown("---")
