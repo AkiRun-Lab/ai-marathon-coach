@@ -213,7 +213,7 @@ def render_input_form(df_vdot, df_pace):
 6. **ご利用のお願い**: 本サービスはAPI利用料の関係で、1日の生成回数に制限があります。より多くの方にご利用いただくため、**お一人様1日1回の利用**にご協力ください。
         """)
     
-    st.markdown("### 📝 あなたの情報を入力してください")
+    st.markdown('<h3 class="form-heading">📝 情報を入力してください</h3>', unsafe_allow_html=True)
     
     with st.form("user_info_form"):
         # 基本情報

@@ -34,6 +34,14 @@ h1.main-header {
     margin-bottom: 1rem;
 }
 
+.form-heading {
+    font-size: clamp(1.1rem, 4.5vw, 1.3rem) !important;
+    font-weight: bold;
+    margin: 1.5rem 0 1rem 0;
+    width: fit-content;
+    max-width: 100%;
+}
+
 .vdot-display {
     background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
     color: white;
