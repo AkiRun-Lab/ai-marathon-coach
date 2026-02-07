@@ -161,12 +161,7 @@ def render_input_form(df_vdot, df_pace):
 </div>
     """, unsafe_allow_html=True)
     
-    # お知らせ（折りたたみ）
-    with st.expander("📋 ご利用にあたってのお願い", expanded=False):
-        st.markdown("""
-本サービスはAPI利用料の関係で、1日の生成回数に制限があります。  
-より多くの方にご利用いただくため、**お一人様1日1回の利用**にご協力ください。
-        """)
+
     
     # ユーザーマニュアル
     with st.expander("📖 使い方・用語説明", expanded=False):
