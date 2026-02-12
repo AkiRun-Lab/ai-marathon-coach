@@ -402,12 +402,14 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     # 12週未満の場合はレース日から逆算して12週前を開始日に設定
     # 12週以上の場合は今日から開始
     if actual_weeks < MIN_TRAINING_WEEKS:
-        training_weeks = MIN_TRAINING_WEEKS
         # レース日から12週前の月曜日を計算
         start_date = race_dt - timedelta(weeks=MIN_TRAINING_WEEKS)
         # 月曜日に調整（その週の月曜日）
         days_since_monday = start_date.weekday()
         start_date = start_date - timedelta(days=days_since_monday)
+        # 月曜調整後の実際の週数を再計算（端数は切り上げて1週間とする）
+        actual_days = (race_dt - start_date).days
+        training_weeks = (actual_days + 6) // 7
     else:
         training_weeks = actual_weeks
         # 開始日は今日の次の月曜日（または今日が月曜なら今日）
