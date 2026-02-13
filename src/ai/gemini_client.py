@@ -394,7 +394,7 @@ def convert_json_to_markdown(json_str: str) -> str:
         weeks = plan.get('weekly_schedules', [])
         for week in weeks:
             md.append(f"**第{week.get('week', '?')}週（{week.get('dates', '')}）**\n")
-            md.append("| 日付 | メニュー | 距離 | ペース | 先生からのアドバイス |")
+            md.append("| 日付 | メニュー | 距離 | ペース | AIコーチからのアドバイス |")
             md.append("|:---|:---|:---|:---|:---|")
             
             for day in week.get('days', []):

@@ -7,30 +7,26 @@ AI Marathon Coach - Configuration
 # アプリ情報
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.5.1"
 
 # =============================================
-# Gemini API 設定
-# =============================================
-# =============================================
-# Gemini API Configuration (Optimized for VDOT & Logic)
+# Gemini API Configuration (Corrected for Gemini 3)
 # =============================================
 GEMINI_MODEL_NAME = "gemini-3-flash-preview"
 
 # Generation Config
-# 理由: VDOTの厳密なペースを守るため、創造性(Randomness)を極限まで下げる
+# VDOT計算の正確性を担保するため、創造性を抑える
 GEMINI_TEMPERATURE = 0.1
 GEMINI_TOP_P = 0.95
-GEMINI_MAX_OUTPUT_TOKENS = 8192  # 3ヶ月分の計画には8kで十分かつ高速
+GEMINI_MAX_OUTPUT_TOKENS = 16384  # JSON形式の13週分計画に対応
 
 # Response Format
-# 理由: アプリ側でのパース処理を確実にするためJSONを強制
 GEMINI_RESPONSE_MIME_TYPE = "application/json"
 
-# Thinking Config (Gemini 3.0 Specs)
-# 理由: 週間走行距離の増加率(10%ルール)などを内部計算させるための思考予算
+# Thinking Config (Gemini 3 Spec)
+# thinking_budget: VDOT計算や週間走行距離の整合性チェックなど、深い推論を行わせるための思考予算
 GEMINI_THINKING_MODE = True
-GEMINI_THINKING_BUDGET = 2048
+GEMINI_THINKING_BUDGET = 4096
 
 # =============================================
 # トレーニング設定
