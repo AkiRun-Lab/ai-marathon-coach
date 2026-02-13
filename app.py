@@ -587,7 +587,10 @@ def render_result_page(df_vdot, df_pace, api_key):
                     try:
                         response = client.generate_content(prompt)
                         if response:
-                            st.session_state.training_plan = sanitize_gemini_output(response)
+                            # JSONからMarkdownへの変換
+                            from src.ai.gemini_client import convert_json_to_markdown
+                            markdown_plan = convert_json_to_markdown(response)
+                            st.session_state.training_plan = markdown_plan
                             break
                         else:
                             # 応答が空の場合
