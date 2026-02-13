@@ -12,7 +12,8 @@ from datetime import datetime, timedelta
 # ローカルモジュール
 from src.config import (
     APP_NAME, APP_VERSION, MIN_TRAINING_WEEKS,
-    get_max_vdot_diff, validate_training_conditions
+    get_max_vdot_diff, validate_training_conditions,
+    get_max_output_tokens
 )
 from src.data_loader import load_csv_data
 from src.vdot import (
@@ -335,8 +336,35 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     
     vdot_diff = target_vdot_result["vdot"] - vdot_result["vdot"]
     
-    # 現在のVDOTに応じた許容VDOT差を取得
-    max_vdot_diff = get_max_vdot_diff(vdot_result["vdot"])
+    # トレーニング期間の計算（VDOT差判定に必要なため先に計算）
+    race_dt = datetime.combine(race_date, datetime.min.time())
+    today = datetime.now()
+    days_until_race = (race_dt - today).days
+    actual_weeks = days_until_race // 7
+    
+    # 12週未満の場合はレース日から逆算して12週前を開始日に設定
+    # 12週以上の場合は今日から開始
+    if actual_weeks < MIN_TRAINING_WEEKS:
+        # レース日から12週前の月曜日を計算
+        start_date = race_dt - timedelta(weeks=MIN_TRAINING_WEEKS)
+        # 月曜日に調整（その週の月曜日）
+        days_since_monday = start_date.weekday()
+        start_date = start_date - timedelta(days=days_since_monday)
+        # 月曜調整後の実際の週数を再計算（端数は切り上げて1週間とする）
+        actual_days = (race_dt - start_date).days
+        training_weeks = (actual_days + 6) // 7
+    else:
+        training_weeks = actual_weeks
+        # 開始日は今日の次の月曜日（または今日が月曜なら今日）
+        if today.weekday() == 0:
+            start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            days_until_monday = 7 - today.weekday()
+            start_date = today + timedelta(days=days_until_monday)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # 現在のVDOTとトレーニング期間に応じた許容VDOT差を取得
+    max_vdot_diff = get_max_vdot_diff(vdot_result["vdot"], training_weeks)
     
     # VDOT差が大きい場合の調整
     original_target_vdot = target_vdot_result["vdot"]
@@ -392,33 +420,6 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     if vdot_result["vdot"]:
         pace_result = calculate_training_paces(df_pace, vdot_result["vdot"])
         st.session_state.training_paces = pace_result
-    
-    # トレーニング期間の計算
-    race_dt = datetime.combine(race_date, datetime.min.time())
-    today = datetime.now()
-    days_until_race = (race_dt - today).days
-    actual_weeks = days_until_race // 7
-    
-    # 12週未満の場合はレース日から逆算して12週前を開始日に設定
-    # 12週以上の場合は今日から開始
-    if actual_weeks < MIN_TRAINING_WEEKS:
-        # レース日から12週前の月曜日を計算
-        start_date = race_dt - timedelta(weeks=MIN_TRAINING_WEEKS)
-        # 月曜日に調整（その週の月曜日）
-        days_since_monday = start_date.weekday()
-        start_date = start_date - timedelta(days=days_since_monday)
-        # 月曜調整後の実際の週数を再計算（端数は切り上げて1週間とする）
-        actual_days = (race_dt - start_date).days
-        training_weeks = (actual_days + 6) // 7
-    else:
-        training_weeks = actual_weeks
-        # 開始日は今日の次の月曜日（または今日が月曜なら今日）
-        if today.weekday() == 0:
-            start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
-        else:
-            days_until_monday = 7 - today.weekday()
-            start_date = today + timedelta(days=days_until_monday)
-            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
     
     st.session_state.training_weeks = training_weeks
     st.session_state.start_date = start_date
@@ -581,15 +582,31 @@ def render_result_page(df_vdot, df_pace, api_key):
                     df_pace, training_weeks, start_date, df_vdot
                 )
                 
+                # 週数に応じた出力トークン数を計算
+                max_tokens = get_max_output_tokens(training_weeks)
+                
                 # 自動リトライ機構（最大2回リトライ＝計3回試行）
                 MAX_RETRIES = 2
                 for attempt in range(MAX_RETRIES + 1):
                     try:
-                        response = client.generate_content(prompt)
+                        response = client.generate_content(prompt, max_output_tokens=max_tokens)
                         if response:
                             # JSONからMarkdownへの変換
                             from src.ai.gemini_client import convert_json_to_markdown
                             markdown_plan = convert_json_to_markdown(response)
+                            
+                            # 週数チェック（警告のみ、ブロックはしない）
+                            import json
+                            try:
+                                json_data = json.loads(response.strip().lstrip('```json').lstrip('```').rstrip('```'))
+                                plan_data = json_data.get('plan', json_data) if isinstance(json_data, dict) else json_data
+                                if isinstance(plan_data, dict):
+                                    actual_weeks = len(plan_data.get('weekly_schedules', []))
+                                    if actual_weeks < training_weeks:
+                                        st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
+                            except (json.JSONDecodeError, AttributeError):
+                                pass  # JSONパース失敗時はチェックをスキップ
+                            
                             st.session_state.training_plan = markdown_plan
                             break
                         else:

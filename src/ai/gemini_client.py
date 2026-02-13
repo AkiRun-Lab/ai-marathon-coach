@@ -22,6 +22,7 @@ from ..config import (
     GEMINI_RESPONSE_MIME_TYPE,
     GEMINI_THINKING_MODE,
     GEMINI_THINKING_BUDGET,
+    get_max_output_tokens,
 )
 from ..vdot import (
     calculate_training_paces,
@@ -41,15 +42,17 @@ class GeminiClient:
         self.client = genai.Client(api_key=api_key)
         self.model_name = GEMINI_MODEL_NAME
     
-    def generate_content(self, prompt: str) -> Optional[str]:
+    def generate_content(self, prompt: str, max_output_tokens: int = None) -> Optional[str]:
         """コンテンツを生成
         
         Args:
             prompt: プロンプト
+            max_output_tokens: 最大出力トークン数（Noneの場合はデフォルト値を使用）
             
         Returns:
             生成されたテキスト（失敗時はNone）
         """
+        effective_max_tokens = max_output_tokens or GEMINI_MAX_OUTPUT_TOKENS
         try:
             response = self.client.models.generate_content(
                 model=self.model_name,
@@ -57,7 +60,7 @@ class GeminiClient:
                 config=types.GenerateContentConfig(
                     temperature=GEMINI_TEMPERATURE,
                     top_p=GEMINI_TOP_P,
-                    max_output_tokens=GEMINI_MAX_OUTPUT_TOKENS,
+                    max_output_tokens=effective_max_tokens,
                     response_mime_type=GEMINI_RESPONSE_MIME_TYPE,
                     thinking_config=types.ThinkingConfig(
                         include_thoughts=True,
@@ -283,6 +286,12 @@ def create_training_prompt(
 # 出力構成
 全{training_weeks}週間のトレーニング計画を、**必ず以下のJSON形式（JSONスキーマに従う）**で出力してください。Markdownのコードブロックは不要です。生JSONのみを出力してください。
 
+## ⚠️ 絶対遵守事項：全週出力
+- weekly_schedulesには**必ず第1週から第{training_weeks}週まで全{training_weeks}週分**を省略せず出力してください。
+- 代表的な週だけを出力して残りを省略することは**禁止**です。
+- weekly_schedulesの配列要素数は**正確に{training_weeks}個**でなければなりません。
+- 各週で7日分のdaysを必ず含めてください。
+
 JSON Schema:
 {{
     "reasoning_summary": "string (プラン作成の思考プロセス要約)",
@@ -323,9 +332,39 @@ JSON Schema:
         "footer": "string"
     }}
 }}
+
+※ 重要: weekly_schedulesの要素数は必ず{training_weeks}個です。省略は一切認めません。
 """
     
     return prompt
+
+
+def _repair_json(json_str: str) -> str:
+    """Geminiが出力する不正なJSONの修復を試みる
+    
+    よくあるパターン:
+    - "menu"キーの欠落: { "date": "...", "休息", "distance": ... }
+    - 裸の文字列値がキーなしで出現
+    """
+    # パターン1: "date"の後に"menu"キーなしで裸の文字列が来る場合
+    # 例: "date": "07/16 (木)", "休息", "distance"
+    #   → "date": "07/16 (木)", "menu": "休息", "distance"
+    repaired = re.sub(
+        r'("date"\s*:\s*"[^"]*")\s*,\s*"([^"]*?)"\s*,\s*"distance"',
+        r'\1, "menu": "\2", "distance"',
+        json_str
+    )
+    
+    # パターン2: 任意のキーの後にキーなし裸文字列が来る場合（汎用）
+    # 例: "key": "value", "bare_string", "next_key":
+    #   → "key": "value", "unknown": "bare_string", "next_key":
+    repaired = re.sub(
+        r'(:\s*"[^"]*")\s*,\s*"([^"]*?)"\s*,\s*"(\w+)"\s*:',
+        r'\1, "menu": "\2", "\3":',
+        repaired
+    )
+    
+    return repaired
 
 
 def convert_json_to_markdown(json_str: str) -> str:
@@ -340,7 +379,18 @@ def convert_json_to_markdown(json_str: str) -> str:
         if json_str.endswith("```"):
             json_str = json_str[:-3]
         
-        data = json.loads(json_str)
+        # まずそのままパースを試みる
+        data = None
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            # パース失敗時はJSON修復を試みる
+            repaired = _repair_json(json_str)
+            try:
+                data = json.loads(repaired)
+            except json.JSONDecodeError:
+                # 修復も失敗した場合はエラーメッセージを返す
+                return "⚠️ AIの応答データに問題がありました。お手数ですが、ページを再読み込みして再度お試しください。"
         
         # 配列のトップレベルか、オブジェクト内のplanかを確認
         plan = {}
@@ -417,11 +467,8 @@ def convert_json_to_markdown(json_str: str) -> str:
         
         return "\n".join(md)
 
-    except json.JSONDecodeError:
-        # JSONでない場合はそのまま返す（Markdownの可能性もあるため）
-        return json_str
     except Exception as e:
-        return f"エラー: データの変換に失敗しました。\n詳細: {str(e)}\n\n元データ:\n{json_str}"
+        return f"⚠️ データの変換中にエラーが発生しました。お手数ですが、ページを再読み込みして再度お試しください。\n\n詳細: {str(e)}"
 
 
 

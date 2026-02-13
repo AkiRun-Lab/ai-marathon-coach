@@ -7,7 +7,7 @@ AI Marathon Coach - Configuration
 # アプリ情報
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.6.0"
 
 # =============================================
 # Gemini API Configuration (Corrected for Gemini 3)
@@ -18,7 +18,7 @@ GEMINI_MODEL_NAME = "gemini-3-flash-preview"
 # VDOT計算の正確性を担保するため、創造性を抑える
 GEMINI_TEMPERATURE = 0.1
 GEMINI_TOP_P = 0.95
-GEMINI_MAX_OUTPUT_TOKENS = 16384  # JSON形式の13週分計画に対応
+GEMINI_MAX_OUTPUT_TOKENS = 16384  # 最低保証値
 
 # Response Format
 GEMINI_RESPONSE_MIME_TYPE = "application/json"
@@ -26,7 +26,25 @@ GEMINI_RESPONSE_MIME_TYPE = "application/json"
 # Thinking Config (Gemini 3 Spec)
 # thinking_budget: VDOT計算や週間走行距離の整合性チェックなど、深い推論を行わせるための思考予算
 GEMINI_THINKING_MODE = True
-GEMINI_THINKING_BUDGET = 4096
+GEMINI_THINKING_BUDGET = 8192
+
+# Gemini 3 Flashの最大出力トークン数
+GEMINI_MAX_OUTPUT_TOKENS_LIMIT = 65536
+
+def get_max_output_tokens(training_weeks: int) -> int:
+    """トレーニング週数に応じた最大出力トークン数を返す
+    
+    1週あたり約1200トークン（7日×各行約170トークン）+ ヘッダー等のオーバーヘッド
+    最低16384、最大65536を保証。
+    
+    Args:
+        training_weeks: トレーニング週数
+        
+    Returns:
+        最大出力トークン数
+    """
+    tokens = training_weeks * 1200 + 2048
+    return max(GEMINI_MAX_OUTPUT_TOKENS, min(tokens, GEMINI_MAX_OUTPUT_TOKENS_LIMIT))
 
 # =============================================
 # トレーニング設定
@@ -37,8 +55,11 @@ MIN_TRAINING_WEEKS = 12
 # フェーズ数（固定）
 NUM_PHASES = 4
 
-# VDOT別の許容VDOT差（1サイクルあたり）
-# (VDOTの下限, VDOTの上限): 許容差
+# VDOT別の許容VDOT差（12週基準値）
+# 実際の許容差はトレーニング期間に応じてスケーリングされる
+# (VDOTの下限, VDOTの上限): 12週あたりの許容差
+BASE_TRAINING_WEEKS = 12  # VDOT_DIFF_BY_LEVELの基準週数
+
 VDOT_DIFF_BY_LEVEL = {
     (0, 40): 4.0,      # 初心者：伸びしろが大きい
     (40, 50): 3.0,     # 中級者：着実な向上
@@ -47,12 +68,35 @@ VDOT_DIFF_BY_LEVEL = {
     (60, 100): 1.5,    # トップエリート：微細な改善のみ
 }
 
-def get_max_vdot_diff(current_vdot: float) -> float:
-    """現在のVDOTに応じた許容VDOT差を返す"""
+# スケーリング倍率の上限（逓減効果のキャップ）
+VDOT_DIFF_SCALE_CAP = 2.5
+
+def get_max_vdot_diff(current_vdot: float, training_weeks: int = BASE_TRAINING_WEEKS) -> float:
+    """現在のVDOTとトレーニング期間に応じた許容VDOT差を返す
+    
+    12週を基準とし、期間が長い場合は平方根スケーリング（逓減効果）で
+    許容差を拡大する。最大で基準値の2.5倍まで。
+    
+    Args:
+        current_vdot: 現在のVDOT値
+        training_weeks: トレーニング週数（デフォルト12週）
+    
+    Returns:
+        許容VDOT差
+    """
+    import math
+    
+    # 基準差を取得
+    base_diff = 2.0  # デフォルト
     for (lower, upper), diff in VDOT_DIFF_BY_LEVEL.items():
         if lower <= current_vdot < upper:
-            return diff
-    return 2.0  # デフォルト
+            base_diff = diff
+            break
+    
+    # 12週基準のスケーリング（平方根で逓減効果を表現）
+    scale = min(math.sqrt(training_weeks / BASE_TRAINING_WEEKS), VDOT_DIFF_SCALE_CAP)
+    
+    return round(base_diff * scale, 1)
 
 # 目標VDOT別の最低トレーニング条件
 # (VDOTの下限, VDOTの上限): (最低週間距離km, 最低練習日数, 最低ポイント練習回数)
