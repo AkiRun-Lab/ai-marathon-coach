@@ -423,18 +423,42 @@ def convert_json_to_markdown(json_str: str) -> str:
         # 3. VDOTとペース
         md.append("## VDOTと設定ペース\n")
         paces = plan.get('vdot_paces', {})
+        
+        available_phases = []
         for i in range(1, 5):
-            phase_key = f"phase_{i}"
-            p = paces.get(phase_key, {})
-            if p:
-                md.append(f"### フェーズ{i}")
-                md.append("| ペース | 設定 |")
-                md.append("|:---|:---|")
-                md.append(f"| E (Easy) | {p.get('E', '')}/km |")
-                md.append(f"| M (Marathon) | {p.get('M', '')}/km |")
-                md.append(f"| T (Threshold) | {p.get('T', '')}/km |")
-                md.append(f"| I (Interval) | {p.get('I', '')}/km |")
-                md.append(f"| R (Repetition) | {p.get('R', '')}/km |\n")
+            if paces.get(f"phase_{i}"):
+                available_phases.append(i)
+                
+        if available_phases:
+            header = "| ペース |"
+            align = "|:---|"
+            for i in available_phases:
+                header += f" フェーズ{i} |"
+                align += ":---|"
+                
+            md.append(header)
+            md.append(align)
+            
+            pace_types = [
+                ("E (Easy)", "E"),
+                ("M (Marathon)", "M"),
+                ("T (Threshold)", "T"),
+                ("I (Interval)", "I"),
+                ("R (Repetition)", "R")
+            ]
+            
+            for label, key in pace_types:
+                row = f"| {label} |"
+                for i in available_phases:
+                    val = str(paces.get(f"phase_{i}", {}).get(key, '')).strip()
+                    if val.endswith('/km'):
+                        row += f" {val} |"
+                    elif val:
+                        row += f" {val}/km |"
+                    else:
+                        row += " |"
+                md.append(row)
+            md.append("")
         
         # 4. フェーズ構成
         md.append(f"## 4フェーズ構成の概要\n\n{plan.get('phase_overview', '')}\n")
