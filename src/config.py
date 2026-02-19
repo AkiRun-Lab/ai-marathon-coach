@@ -7,7 +7,7 @@ AI Marathon Coach - Configuration
 # アプリ情報
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 
 # =============================================
 # Gemini API Configuration (Corrected for Gemini 3)
