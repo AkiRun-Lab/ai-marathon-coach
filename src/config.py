@@ -7,12 +7,16 @@ AI Marathon Coach - Configuration
 # アプリ情報
 # =============================================
 APP_NAME = "AIマラソンコーチ"
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.7.0"
 
 # =============================================
 # Gemini API Configuration (Corrected for Gemini 3)
 # =============================================
-GEMINI_MODEL_NAME = "gemini-3-flash-preview"
+GEMINI_AVAILABLE_MODELS = {
+    "gemini-3-flash-preview": "Gemini 3 Flash（高性能）",
+    "gemini-3.1-flash-lite-preview": "Gemini 3.1 Flash Lite（軽量・高速）",
+}
+GEMINI_DEFAULT_MODEL = "gemini-3-flash-preview"
 
 # Generation Config
 # VDOT計算の正確性を担保するため、創造性を抑える

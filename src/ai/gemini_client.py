@@ -14,7 +14,7 @@ import json
 from ..config import (
     APP_NAME,
     APP_VERSION,
-    GEMINI_MODEL_NAME,
+    GEMINI_DEFAULT_MODEL,
     GEMINI_TEMPERATURE,
     GEMINI_TOP_P,
     GEMINI_MAX_OUTPUT_TOKENS,
@@ -34,13 +34,14 @@ from ..vdot import (
 class GeminiClient:
     """Gemini APIクライアント（新SDK対応）"""
     
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model_name: str = None):
         """
         Args:
             api_key: Gemini API Key
+            model_name: 使用するモデル名（Noneの場合はデフォルトモデルを使用）
         """
         self.client = genai.Client(api_key=api_key)
-        self.model_name = GEMINI_MODEL_NAME
+        self.model_name = model_name or GEMINI_DEFAULT_MODEL
     
     def generate_content(self, prompt: str, max_output_tokens: int = None) -> Optional[str]:
         """コンテンツを生成
@@ -367,8 +368,13 @@ def _repair_json(json_str: str) -> str:
     return repaired
 
 
-def convert_json_to_markdown(json_str: str) -> str:
-    """GeminiのJSON応答をMarkdown形式に変換する"""
+def convert_json_to_markdown(json_str: str, user_data: dict = None) -> str:
+    """GeminiのJSON応答をMarkdown形式に変換する
+    
+    Args:
+        json_str: GeminiのJSON応答文字列
+        user_data: ユーザー入力データ（中間目標情報の注入に使用）
+    """
     try:
         # JSON文字列のクリーニング（Markdownコードブロックなどで囲まれている場合の対策）
         json_str = json_str.strip()
@@ -408,17 +414,36 @@ def convert_json_to_markdown(json_str: str) -> str:
         
         # Markdown構築
         md = []
+        info = plan.get('basic_info', {})
         
         # 1. はじめに
-        md.append(f"## はじめに\n\n{plan.get('introduction', '')}\n")
+        introduction_text = plan.get('introduction', '')
+        md.append(f"## はじめに\n\n{introduction_text}\n")
         
-        # 2. 基本情報
-        info = plan.get('basic_info', {})
+        # 中間目標が設定されている場合、はじめにの末尾に注意書きを追加
+        adjusted_target_vdot = user_data.get('adjusted_target_vdot') if user_data else None
+        original_target_vdot = user_data.get('original_target_vdot') if user_data else None
+        if adjusted_target_vdot and original_target_vdot and adjusted_target_vdot != original_target_vdot:
+            target_time = user_data.get('target_time', '')
+            md.append(f"> ⚠️ **中間目標について**: 現在のVDOTと最終目標（VDOT {original_target_vdot} / {target_time}）の差が大きいため、"
+                      f"本計画では**中間目標（VDOT {adjusted_target_vdot}）**を設定しています。"
+                      f"この中間目標を達成した後、次のトレーニングサイクルで最終目標を目指すことをお勧めします。\n")
+        
+        # 2. 基本情報（中間目標がある場合はuser_dataから直接構築）
         md.append("## 基本情報\n")
-        md.append(f"- 目標レース: {info.get('target_race', '')}")
-        md.append(f"- 目標タイム: {info.get('target_time', '')}")
-        md.append(f"- 週間走行距離: {info.get('weekly_mileage', '')}")
-        md.append(f"- 現在VDOT: {info.get('current_vdot', '')} → 目標VDOT: {info.get('target_vdot', '')}\n")
+        if adjusted_target_vdot and original_target_vdot and adjusted_target_vdot != original_target_vdot:
+            current_time = user_data.get('current_time', '')
+            adjusted_marathon_time = user_data.get('adjusted_marathon_time', '')
+            md.append(f"- 目標レース: {info.get('target_race', '')}")
+            md.append(f"- 現在タイム: {current_time}（VDOT {info.get('current_vdot', '')}）")
+            md.append(f"- 中間目標タイム: {adjusted_marathon_time}（VDOT {adjusted_target_vdot}）")
+            md.append(f"- 最終目標タイム: {user_data.get('target_time', '')}（VDOT {original_target_vdot}）")
+            md.append(f"- 週間走行距離: {info.get('weekly_mileage', '')}\n")
+        else:
+            md.append(f"- 目標レース: {info.get('target_race', '')}")
+            md.append(f"- 目標タイム: {info.get('target_time', '')}")
+            md.append(f"- 週間走行距離: {info.get('weekly_mileage', '')}")
+            md.append(f"- 現在VDOT: {info.get('current_vdot', '')} → 目標VDOT: {info.get('target_vdot', '')}\n")
         
         # 3. VDOTとペース
         md.append("## VDOTと設定ペース\n")

@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 from src.config import (
     APP_NAME, APP_VERSION, MIN_TRAINING_WEEKS,
     get_max_vdot_diff, validate_training_conditions,
-    get_max_output_tokens
+    get_max_output_tokens,
+    GEMINI_AVAILABLE_MODELS, GEMINI_DEFAULT_MODEL,
 )
 from src.data_loader import load_csv_data
 from src.vdot import (
@@ -59,6 +60,7 @@ def init_session_state():
         "data_loaded": False,
         "training_weeks": 12,
         "start_date": None,
+        "selected_model": GEMINI_DEFAULT_MODEL,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -289,10 +291,30 @@ def render_input_form(df_vdot, df_pace):
         
         st.markdown("---")
         
+        # AIモデル選択
+        # AIモデル選択（開発者オプション: URLに ?dev=1 を指定した場合のみ表示）
+        is_dev_mode = query_params.get("dev") == "1"
+        if is_dev_mode:
+            st.markdown('<div class="form-section-title">🤖 AIモデル選択（開発者オプション）</div>', unsafe_allow_html=True)
+            model_options = list(GEMINI_AVAILABLE_MODELS.keys())
+            model_labels = list(GEMINI_AVAILABLE_MODELS.values())
+            default_idx = model_options.index(GEMINI_DEFAULT_MODEL)
+            selected_model_label = st.selectbox(
+                "使用するAIモデル",
+                model_labels,
+                index=default_idx,
+                help="Gemini 3 Flash: 高精度な計画生成 / Gemini 3.1 Flash Lite: 高速・軽量な計画生成"
+            )
+            selected_model = model_options[model_labels.index(selected_model_label)]
+            st.markdown("---")
+        else:
+            selected_model = GEMINI_DEFAULT_MODEL
+        
         # 送信ボタン
         submitted = st.form_submit_button("🚀 トレーニング計画を作成", use_container_width=True, type="primary")
         
         if submitted:
+            st.session_state.selected_model = selected_model
             process_form_submission(
                 name, age, gender, current_h, current_m, current_s,
                 target_h, target_m, target_s, race_name, race_date,
@@ -518,6 +540,8 @@ def render_result_page(df_vdot, df_pace, api_key):
     # VDOT差チェックと警告/確認
     if vdot_diff > max_vdot_diff and adjusted_target_vdot:
         adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
+        # user_dataに中間目標マラソンタイムを保存（Markdown変換で使用）
+        user_data['adjusted_marathon_time'] = adjusted_marathon_time
         st.markdown(f"""
 <div class="warning-box">
     <h4>⚠️ 目標タイムについての重要なお知らせ</h4>
@@ -575,7 +599,8 @@ def render_result_page(df_vdot, df_pace, api_key):
         st.toast("🏃 トレーニング計画を作成中です。1〜2分お待ちください...", icon="🏃")
         with st.spinner("🏃 トレーニング計画を作成中...（1〜2分程度かかります）"):
             try:
-                client = GeminiClient(api_key)
+                selected_model = st.session_state.get('selected_model', GEMINI_DEFAULT_MODEL)
+                client = GeminiClient(api_key, model_name=selected_model)
                 effective_target_vdot_for_prompt = {"vdot": effective_target_vdot}
                 prompt = create_training_prompt(
                     user_data, vdot_info, pace_info, effective_target_vdot_for_prompt,
@@ -593,7 +618,7 @@ def render_result_page(df_vdot, df_pace, api_key):
                         if response:
                             # JSONからMarkdownへの変換
                             from src.ai.gemini_client import convert_json_to_markdown
-                            markdown_plan = convert_json_to_markdown(response)
+                            markdown_plan = convert_json_to_markdown(response, user_data=user_data)
                             
                             # 週数チェック（警告のみ、ブロックはしない）
                             import json
