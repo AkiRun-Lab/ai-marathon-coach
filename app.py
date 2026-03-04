@@ -597,6 +597,58 @@ def render_result_page(df_vdot, df_pace, api_key):
     # トレーニング計画生成
     if not st.session_state.training_plan:
         st.toast("🏃 トレーニング計画を作成中です。1〜2分お待ちください...", icon="🏃")
+        
+        # 待ち時間コンテンツ（スピナーの下に表示）
+        st.markdown("""
+<div style="
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 1px solid rgba(0, 229, 255, 0.2);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+">
+    <p style="color: #00E5FF; font-size: 1.1rem; font-weight: bold; margin-bottom: 1rem; text-align: center;">
+        📖 計画ができるまで、こちらの記事はいかがですか？
+    </p>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="https://akirun.net/polar-verity-sense-review/" target="_blank" style="
+            flex: 1; min-width: 250px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            text-decoration: none;
+            transition: background 0.2s;
+        ">
+            <p style="font-size: 1.3rem; margin-bottom: 0.3rem;">⌚</p>
+            <p style="color: #E2E8F0; font-size: 0.95rem; font-weight: bold; margin-bottom: 0.3rem;">
+                Eペースを心拍で管理する方法
+            </p>
+            <p style="color: #94A3B8; font-size: 0.8rem; margin: 0;">
+                アームバンド型心拍計で心肺機能の成長を高精度に測定 →
+            </p>
+        </a>
+        <a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="
+            flex: 1; min-width: 250px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            text-decoration: none;
+            transition: background 0.2s;
+        ">
+            <p style="font-size: 1.3rem; margin-bottom: 0.3rem;">👟</p>
+            <p style="color: #E2E8F0; font-size: 0.95rem; font-weight: bold; margin-bottom: 0.3rem;">
+                マラソンおすすめギア総まとめ
+            </p>
+            <p style="color: #94A3B8; font-size: 0.8rem; margin: 0;">
+                シューズ・ウェア・補給を科学的根拠で厳選 →
+            </p>
+        </a>
+    </div>
+</div>
+        """, unsafe_allow_html=True)
+        
         with st.spinner("🏃 トレーニング計画を作成中...（1〜2分程度かかります）"):
             try:
                 selected_model = st.session_state.get('selected_model', GEMINI_DEFAULT_MODEL)
@@ -661,43 +713,68 @@ def render_result_page(df_vdot, df_pace, api_key):
         st.markdown("---")
         st.markdown("## 📋 トレーニング計画")
         
-        # 案3: 計画の上にヒント表示
-        st.markdown("""
-        <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 1rem;">
-            💡 ヒント: このプランを効果的に実践するための<a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="color: #00E5FF;">おすすめギアはこちら</a>
-        </p>
-        """, unsafe_allow_html=True)
-        
         st.markdown(st.session_state.training_plan)
         
-        # 案1: アフィリエイトCTAボックス
-        st.markdown("""
-        <div style="
-            background: linear-gradient(135deg, #1E3A5F 0%, #0F172A 100%);
-            border: 1px solid #00E5FF;
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-            text-align: center;
-        ">
-            <p style="color: #00E5FF; font-size: 1.1rem; margin-bottom: 0.5rem;">
-                📚 トレーニング効率を最大化するギア
-            </p>
-            <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 1rem;">
-                科学的根拠に基づいて厳選したランニングギアを紹介しています
-            </p>
-            <a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="
-                display: inline-block;
-                background: linear-gradient(135deg, #00E5FF 0%, #0EA5E9 100%);
-                color: #0F172A;
-                padding: 0.75rem 2rem;
-                border-radius: 8px;
-                text-decoration: none;
-                font-weight: bold;
-                font-size: 1rem;
-            ">🛒 厳選ギアを見る →</a>
-        </div>
-        """, unsafe_allow_html=True)
+        # 計画下部: 2カラムCTA
+        col_cta1, col_cta2 = st.columns(2)
+        with col_cta1:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #1E3A5F 0%, #0F172A 100%);
+                border: 1px solid #00E5FF;
+                border-radius: 12px;
+                padding: 1.2rem;
+                text-align: center;
+                height: 100%;
+            ">
+                <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">⌚</p>
+                <p style="color: #00E5FF; font-size: 1rem; font-weight: bold; margin-bottom: 0.5rem;">
+                    心拍計の精度で走りが変わる
+                </p>
+                <p style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 0.8rem;">
+                    心肺機能の成長を<br>高精度心拍計で測定
+                </p>
+                <a href="https://akirun.net/polar-verity-sense-review/" target="_blank" style="
+                    display: inline-block;
+                    background: linear-gradient(135deg, #00E5FF 0%, #0EA5E9 100%);
+                    color: #0F172A;
+                    padding: 0.5rem 1.2rem;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: bold;
+                    font-size: 0.9rem;
+                ">レビューを読む →</a>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_cta2:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #1E3A5F 0%, #0F172A 100%);
+                border: 1px solid #00E5FF;
+                border-radius: 12px;
+                padding: 1.2rem;
+                text-align: center;
+                height: 100%;
+            ">
+                <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">👟</p>
+                <p style="color: #00E5FF; font-size: 1rem; font-weight: bold; margin-bottom: 0.5rem;">
+                    ギア選びで差をつける
+                </p>
+                <p style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 0.8rem;">
+                    練習効率とレース本番のパフォーマンスを<br>最大化する厳選ギア
+                </p>
+                <a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="
+                    display: inline-block;
+                    background: linear-gradient(135deg, #00E5FF 0%, #0EA5E9 100%);
+                    color: #0F172A;
+                    padding: 0.5rem 1.2rem;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: bold;
+                    font-size: 0.9rem;
+                ">おすすめギアを見る →</a>
+            </div>
+            """, unsafe_allow_html=True)
         
         # ダウンロードボタン
         st.markdown("---")

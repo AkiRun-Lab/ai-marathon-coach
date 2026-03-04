@@ -491,8 +491,13 @@ def convert_json_to_markdown(json_str: str, user_data: dict = None) -> str:
         # 5. 週間トレーニング計画
         md.append("## 週間トレーニング計画\n")
         weeks = plan.get('weekly_schedules', [])
+        total_weeks = len(weeks)
+        weeks_per_phase = total_weeks // NUM_PHASES if total_weeks >= NUM_PHASES else total_weeks
+        
         for week in weeks:
-            md.append(f"**第{week.get('week', '?')}週（{week.get('dates', '')}）**\n")
+            week_num = week.get('week', 0)
+            
+            md.append(f"**第{week_num}週（{week.get('dates', '')}）**\n")
             md.append("| 日付 | メニュー | 距離 | ペース | AIコーチからのアドバイス |")
             md.append("|:---|:---|:---|:---|:---|")
             
@@ -500,6 +505,24 @@ def convert_json_to_markdown(json_str: str, user_data: dict = None) -> str:
                 md.append(f"| {day.get('date', '')} | {day.get('menu', '')} | {day.get('distance', '')} | {day.get('pace', '')} | {day.get('advice', '')} |")
             
             md.append(f"\n週間走行距離: {week.get('total_distance', '')}\n")
+            
+            # フェーズ切り替わりにコンテキストCTAを挿入
+            if weeks_per_phase > 0 and week_num == weeks_per_phase:
+                # Phase 1 終了後: 心拍トレーニング訴求
+                md.append("---")
+                md.append("💡 **基礎構築期を終えたあなたへ** ── "
+                          "Eペースを「感覚」ではなく「心拍数」で管理すると、有酸素ベースの構築がより確実になります。")
+                md.append("[👉 光学式心拍計 Polar Verity Sense レビュー →]"
+                          "(https://akirun.net/polar-verity-sense-review/)\n")
+                md.append("---\n")
+            elif weeks_per_phase > 0 and week_num == weeks_per_phase * 3:
+                # Phase 3 終了後: レース準備訴求
+                md.append("---")
+                md.append("🏃 **レース本番が近づいてきました** ── "
+                          "シューズ・補給・ウェアの準備は万全ですか？科学的根拠に基づいたギア選びで、練習の成果を最大限に発揮しましょう。")
+                md.append("[👉 マラソンおすすめギア総まとめ →]"
+                          "(https://akirun.net/marathon-gear-recommend/)\n")
+                md.append("---\n")
         
         # 6. 注意事項
         md.append("## 注意事項\n")
