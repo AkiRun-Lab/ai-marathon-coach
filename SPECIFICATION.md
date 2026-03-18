@@ -162,7 +162,7 @@ python3 -m pytest tests/ -v
 
 ### 起動コマンド
 ```bash
-cd /Users/yasuchin/apps/ai-marathon-coach/ai-marathon-coach
+cd /Users/yasuchin/akirun_project/apps/amc
 python3 -m streamlit run app.py
 ```
 

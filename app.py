@@ -689,7 +689,8 @@ def render_result_page(df_vdot, df_pace, api_key):
                         else:
                             # 応答が空の場合
                             if attempt < MAX_RETRIES:
-                                time.sleep(1)
+                                wait_time = 2 ** (attempt + 1)  # 2s, 4s（指数バックオフ）
+                                time.sleep(wait_time)
                                 continue
                             else:
                                 st.error("⚠️ AIからの応答が空でした。混雑している可能性があります。時間をおいて再試行してください。")
@@ -697,10 +698,17 @@ def render_result_page(df_vdot, df_pace, api_key):
                     except Exception as e:
                         # APIエラー発生時
                         if attempt < MAX_RETRIES:
-                            time.sleep(1)
+                            wait_time = 2 ** (attempt + 1)  # 2s, 4s（指数バックオフ）
+                            time.sleep(wait_time)
                             continue
                         else:
-                            st.error(f"APIエラーが発生しました（{MAX_RETRIES+1}回試行）: {str(e)}")
+                            err_str = str(e)
+                            if "503_SERVICE_UNAVAILABLE" in err_str:
+                                st.error(f"⚠️ サーバーが混雑しているため応答できませんでした（{MAX_RETRIES+1}回試行）。しばらく待ってから再度お試しください。")
+                            elif "429_RATE_LIMITED" in err_str:
+                                st.error(f"⚠️ APIのリクエスト上限に達しました（{MAX_RETRIES+1}回試行）。時間をおいてから再度お試しください。")
+                            else:
+                                st.error(f"APIエラーが発生しました（{MAX_RETRIES+1}回試行）: {err_str}")
                             st.session_state.training_plan = None
 
             except Exception as e:

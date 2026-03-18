@@ -71,7 +71,13 @@ class GeminiClient:
             )
             return response.text
         except Exception as e:
-            raise RuntimeError(f"Gemini API エラー: {str(e)}")
+            err_str = str(e)
+            if "503" in err_str or "Service Unavailable" in err_str:
+                raise RuntimeError(f"503_SERVICE_UNAVAILABLE: {err_str}")
+            elif "429" in err_str or "Resource Exhausted" in err_str:
+                raise RuntimeError(f"429_RATE_LIMITED: {err_str}")
+            else:
+                raise RuntimeError(f"Gemini API エラー: {err_str}")
 
 
 def sanitize_gemini_output(content: str) -> str:

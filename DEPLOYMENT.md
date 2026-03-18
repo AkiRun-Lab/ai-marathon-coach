@@ -17,7 +17,7 @@
 ### Step 1: ローカルで変更をコミット
 
 ```bash
-cd /Users/yasuchin/apps/ai-marathon-coach/ai-marathon-coach
+cd /Users/yasuchin/akirun_project/apps/amc
 git add -A
 git commit -m "更新内容の説明"
 ```
