@@ -55,7 +55,7 @@ def render_footer() -> None:
     <p><strong>👤 開発者: あきら</strong><br>🏃 フルマラソンPB 2:46:27</p>
     <p>
         📝 <a href="https://akirun.net/" target="_blank">AkiRun｜走りを科学でアップデート</a><br>
-        📖 <a href="https://akirun.net/ai-marathon-coach-guide/" target="_blank">AIマラソンコーチの使い方</a>
+        📖 <a href="https://akirun.net/ai-marathon-coach-guide/" target="_blank">マラソントレーニング・プランナーの使い方</a>
     </p>
 </div>
     """, unsafe_allow_html=True)

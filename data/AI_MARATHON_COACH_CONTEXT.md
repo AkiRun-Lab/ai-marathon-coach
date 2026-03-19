@@ -1,10 +1,10 @@
-# AIマラソンコーチ (AMC) - Claude Code Desktop コンテキスト
+# マラソントレーニング・プランナー (AMC) - Claude Code Desktop コンテキスト
 
 ## 1. プロジェクト概要
 
 | 項目 | 内容 |
 |:-----|:-----|
-| アプリ名 | AIマラソンコーチ |
+| アプリ名 | マラソントレーニング・プランナー |
 | バージョン | 1.0.0 |
 | 公開URL | https://akirun-ai-marathon-coach.streamlit.app/ |
 | ブログLP | https://akirun.net/lp/ai-marathon-coach/ |

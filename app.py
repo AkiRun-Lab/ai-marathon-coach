@@ -1,5 +1,5 @@
 """
-AIマラソンコーチ - Streamlit App
+マラソントレーニング・プランナー - Streamlit App
 ジャック・ダニエルズのVDOT理論に基づくトレーニング計画生成
 
 Version: 1.0.0
