@@ -113,6 +113,23 @@ git check-ignore -v .streamlit/secrets.toml
 
 ## ⚠️ 注意事項
 
+### VDOTデータの編集ルール
+
+VDOTデータ（`vdot_list.csv`, `vdot_pace.csv`）は `data/vdot/` が正規ソースです。`apps/amc/data/` 内のファイルを直接編集しないでください。
+
+```bash
+# 1. 正規データを編集
+#    data/vdot/vdot_list.csv または data/vdot/vdot_pace.csv
+
+# 2. 各アプリに同期
+./scripts/sync-vdot-data.sh
+
+# 3. 差分チェックのみ（変更なし）
+./scripts/sync-vdot-data.sh --check
+```
+
+同期先: AMC（`apps/amc/data/`）、MSS（`apps/mss/data/`）、VDOT計算機（ビルド時に参照）
+
 ### 無料プランの制限
 | 項目 | 制限 |
 |:-----|:-----|
