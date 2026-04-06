@@ -7,7 +7,7 @@ AI Marathon Coach - Configuration
 # アプリ情報
 # =============================================
 APP_NAME = "マラソントレーニング・プランナー"
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
 
 # =============================================
 # Gemini API Configuration (Corrected for Gemini 3)
