@@ -1,0 +1,148 @@
+<style>
+  .amc-wrapper {
+    width: 100%;
+    overflow: hidden;
+    background-color: #0E1117;
+    margin: 0;
+    padding: 0;
+  }
+  .amc-iframe {
+    width: calc(100% + 10px);
+    border: none !important;
+    display: block;
+    margin-left: -5px;
+    margin-top: -5px;
+    margin-bottom: 0;
+    clip-path: inset(5px 5px 0 5px);
+  }
+  @media (min-width: 768px) { .amc-iframe { height: 2250px; } }
+  @media (max-width: 767px) { .amc-iframe { height: 3500px; } }
+
+  /* iframeの下に表示するコンテンツ（ダークモード） */
+  .amc-content {
+    background: #0E1117;
+    color: #FAFAFA;
+    padding: 40px 30px;
+    line-height: 1.8;
+    font-size: 16px;
+  }
+  .amc-content h2 {
+    color: #FF4B4B;
+    font-size: 1.4em;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #333;
+  }
+  .amc-content h2:first-child {
+    margin-top: 0;
+  }
+  .amc-content ul {
+    padding-left: 20px;
+    margin: 15px 0;
+  }
+  .amc-content li {
+    margin-bottom: 8px;
+    color: #FAFAFA;
+  }
+  .amc-content li strong {
+    color: #FF4B4B;
+  }
+  .amc-content p {
+    margin: 15px 0;
+    color: #FAFAFA;
+  }
+  .amc-content a {
+    color: #FF4B4B;
+    text-decoration: none;
+  }
+  .amc-content a:hover {
+    text-decoration: underline;
+  }
+  .amc-content .note {
+    background: #1a1d24;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    color: #888;
+    margin-top: 30px;
+    border: 1px solid #333;
+  }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "マラソントレーニング・プランナー",
+  "operatingSystem": "Web",
+  "applicationCategory": "HealthApplication",
+  "description": "Jack Daniels博士のVDOT理論に基づき、あなた専用の12週間マラソン練習メニューを自動生成するAIツールです。",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "JPY"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "あきら",
+    "url": "https://akirun.net/profile/"
+  }
+}
+</script>
+<div class="amc-wrapper">
+  <iframe
+    class="amc-iframe"
+    src="https://akirun-ai-marathon-coach.streamlit.app/?embed=true"
+    loading="lazy"
+    title="マラソントレーニング・プランナー"
+  ></iframe>
+</div>
+<div class="amc-content">
+  <h2>マラソントレーニング・プランナーとは？練習メニュー作成AIツール</h2>
+  <p>
+    「AkiRun｜走りを科学でアップデート」が運営する、自己ベスト2時間46分のランナーが開発したAIコーチングツールです。
+    あなたの記録や練習内容を入力することで、最新のスポーツ科学に基づく最適な練習メニューとトレーニング計画をAIが自動作成します。
+  </p>
+
+  <h2>主な機能：VDOT理論に基づく5つの特徴</h2>
+  <ul>
+    <li><strong>12週間トレーニング計画</strong>：Jack Daniels博士のVDOT理論に基づく週間メニューを自動作成</li>
+    <li><strong>VDOTベースのペース計算</strong>：現在の走力から最適なトレーニングペース（E/M/T/I/R）を算出</li>
+    <li><strong>練習レース対応</strong>：本番前の調整レースを組み込んだ計画を生成</li>
+    <li><strong>個別カスタマイズ</strong>：週間走行距離や練習可能日数に応じた調整</li>
+    <li>目標タイムに向けた具体的な練習メニューの提案</li>
+    <li>科学的な指標（VDOTなど）に基づいたペース計算</li>
+    <li>現状の課題分析と改善アドバイス</li>
+  </ul>
+
+  <h2>対象ランナー：サブ4〜サブ3を目指す市民ランナー</h2>
+  <p>
+    サブ4からサブ3を目指す市民ランナー、科学的なトレーニング方法に興味がある方、
+    効率的にマラソンタイムを向上させたい方におすすめです。
+  </p>
+
+  <h2>開発者について</h2>
+  <p>
+    本ツールは、AkiRun（走りを科学でアップデート）を運営する、
+    フルマラソン自己ベスト2時間46分27秒のランナー・あきらが開発しました。
+  </p>
+</div>
+<!-- パラメータ連携用スクリプト -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchParams = window.location.search;
+    if (!searchParams) return;
+    const iframe = document.querySelector('.amc-iframe');
+    if (!iframe) return;
+    try {
+        const currentSrc = new URL(iframe.src);
+        const parentParams = new URLSearchParams(searchParams);
+        parentParams.forEach((value, key) => {
+            currentSrc.searchParams.set(key, value);
+        });
+        iframe.src = currentSrc.toString();
+    } catch (e) {
+        console.error('AMC Integration Error:', e);
+    }
+});
+</script>
