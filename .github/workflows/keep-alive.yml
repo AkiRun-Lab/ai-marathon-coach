@@ -39,14 +39,56 @@ jobs:
               // スリープ中は networkidle にならないため domcontentloaded を使用
               // タイムアウトしても wake ボタン検知を続けるため catch で握りつぶす
               await page.goto(url, { timeout: 30000, waitUntil: 'domcontentloaded' }).catch(() => {});
-              // SPA描画を待つ（スリープページはJSで描画される）
-              await page.waitForTimeout(8000);
-              // Streamlit のスリープページには "Yes, get this app back up!" ボタンがある
-              const wakeBtn = page.getByRole('button', { name: /get this app back up/i });
-              const isSleeping = await wakeBtn.isVisible({ timeout: 15000 }).catch(() => false);
+              // SPA描画を待つ（スリープページはJSで描画される）20秒に増加
+              await page.waitForTimeout(20000);
+
+              // デバッグ：ページタイトル・URL・HTML先頭500文字を記録
+              const title = await page.title().catch(() => '');
+              const currentUrl = page.url();
+              console.log(`DEBUG: title="${title}", url="${currentUrl}"`);
+              const htmlContent = await page.content().catch(() => '');
+              console.log(`DEBUG: html_snippet="${htmlContent.slice(0, 500)}"`);
+
+              // スリープ検出1：HTMLコンテンツにスリープキーワードがあるか
+              const sleepKeywords = ['gone to sleep', 'asleep', 'get this app back up', 'wake up this app'];
+              let isSleeping = sleepKeywords.some(kw => htmlContent.toLowerCase().includes(kw));
+
+              // スリープ検出2：ページタイトルで判定
+              const titleLower = title.toLowerCase();
+              if (titleLower.includes('sleep') || titleLower.includes('asleep')) {
+                isSleeping = true;
+              }
+
+              // スリープ検出3：メインフレームのボタンセレクター
+              let wakeBtn = null;
+              const mainBtn = page.getByRole('button', { name: /get this app back up/i });
+              if (await mainBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                isSleeping = true;
+                wakeBtn = mainBtn;
+              }
+
+              // スリープ検出4：iframeの中もチェック（Streamlitがiframe経由でスリープUIを表示する場合）
+              if (!wakeBtn) {
+                for (const frame of page.frames()) {
+                  const btn = frame.getByRole('button', { name: /get this app back up/i });
+                  if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    isSleeping = true;
+                    wakeBtn = btn;
+                    break;
+                  }
+                }
+              }
+
+              console.log(`DEBUG: isSleeping=${isSleeping}, wakeBtnFound=${!!wakeBtn}`);
+
               if (isSleeping) {
                 console.log('STATUS: SLEEPING - Clicking wake-up button...');
-                await wakeBtn.click();
+                if (wakeBtn) {
+                  await wakeBtn.click();
+                } else {
+                  // フォールバック：最初のボタンをクリック
+                  await page.locator('button').first().click({ timeout: 5000 }).catch(e => console.log('Fallback click failed:', e.message));
+                }
                 await page.waitForTimeout(90000);
                 console.log('Wake-up request sent. App should be starting.');
                 process.exitCode = 1; // GitHub にメール通知させる
