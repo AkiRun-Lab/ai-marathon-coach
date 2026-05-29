@@ -31,13 +31,26 @@ jobs:
           cat > wake.js << 'EOF'
           const { chromium } = require('playwright');
           (async () => {
-            const browser = await chromium.launch();
-            const page = await browser.newPage();
+            // bot 検出回避：Streamlit Cloud はヘッドレスブラウザを not_found にリダイレクトするため
+            const browser = await chromium.launch({
+              args: ['--disable-blink-features=AutomationControlled']
+            });
+            const context = await browser.newContext({
+              userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              extraHTTPHeaders: {
+                'Accept-Language': 'ja,en;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+              }
+            });
+            const page = await context.newPage();
+            // navigator.webdriver を隠して自動化ブラウザとして検出されないようにする
+            await page.addInitScript(() => {
+              Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            });
+
             const url = 'https://ai-marathon-coach.streamlit.app/';
             console.log(`[${new Date().toISOString()}] Accessing ${url} ...`);
             try {
-              // スリープ中は networkidle にならないため domcontentloaded を使用
-              // タイムアウトしても wake ボタン検知を続けるため catch で握りつぶす
               await page.goto(url, { timeout: 30000, waitUntil: 'domcontentloaded' }).catch(() => {});
               // SPA描画を待つ（スリープページはJSで描画される）
               await page.waitForTimeout(20000);
@@ -47,33 +60,28 @@ jobs:
               const htmlContent = await page.content().catch(() => '');
               console.log(`DEBUG: title="${title}", url="${currentUrl}"`);
 
-              // スリープ検出1（新仕様）：not_found にリダイレクトされたらスリープ
-              // Streamlit Cloud の仕様変更でスリープ中は /errors/not_found にリダイレクトされる
-              const isNotFound = currentUrl.includes('/errors/not_found') || title.includes('Not found');
-
-              // スリープ検出2（旧仕様）：タイトル・HTML キーワード・ボタンで判定
+              // スリープ検出1（旧仕様）：スリープ画面のボタン・テキスト・タイトルで判定
               const titleLower = title.toLowerCase();
               const isOldStyleSleep =
                 titleLower.includes('sleep') || titleLower.includes('asleep') ||
                 ['gone to sleep', 'asleep', 'get this app back up'].some(kw => htmlContent.toLowerCase().includes(kw));
 
-              let isSleeping = isNotFound || isOldStyleSleep;
-              console.log(`DEBUG: isSleeping=${isSleeping}, isNotFound=${isNotFound}, isOldStyleSleep=${isOldStyleSleep}`);
+              // スリープ検出2（フォールバック）：bot 判定で not_found にリダイレクトされた場合
+              const isNotFound = currentUrl.includes('/errors/not_found') || title.includes('Not found');
 
-              // 旧仕様のウェイクボタンがある場合はクリック
+              let isSleeping = isOldStyleSleep || isNotFound;
+              console.log(`DEBUG: isSleeping=${isSleeping}, isOldStyleSleep=${isOldStyleSleep}, isNotFound=${isNotFound}`);
+
               if (isSleeping) {
+                // スリープ画面のウェイクボタンをクリック（旧仕様）
                 const wakeBtn = page.getByRole('button', { name: /get this app back up/i });
                 if (await wakeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
                   await wakeBtn.click();
-                  console.log('Clicked wake button (old-style).');
-                } else if (isNotFound) {
-                  // 新仕様：元のURLに再アクセスしてウェイクアップを開始する
-                  console.log('Re-accessing app URL to trigger wake-up (new-style)...');
+                  console.log('Clicked wake button.');
+                } else {
+                  console.log('Wake button not found. Re-accessing to trigger wake-up...');
                   await page.goto(url, { timeout: 60000, waitUntil: 'domcontentloaded' }).catch(() => {});
                 }
-              }
-
-              if (isSleeping) {
                 console.log('STATUS: SLEEPING - Wake-up triggered. Waiting for boot...');
                 await page.waitForTimeout(90000);
                 console.log('Wake-up request sent. App should be starting.');
