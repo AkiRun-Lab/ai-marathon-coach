@@ -16,6 +16,7 @@ from src.config import (
     get_max_vdot_diff, validate_training_conditions,
     get_max_output_tokens,
     GEMINI_AVAILABLE_MODELS, GEMINI_DEFAULT_MODEL,
+    AMAZON_STORE_URL,
 )
 from src.data_loader import load_csv_data
 from src.vdot import (
@@ -600,7 +601,7 @@ def render_result_page(df_vdot, df_pace, api_key):
         st.toast("🏃 トレーニング計画を作成中です。1〜2分お待ちください...", icon="🏃")
         
         # 待ち時間コンテンツ（スピナーの下に表示）
-        st.markdown("""
+        st.markdown(f"""
 <div style="
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     border: 1px solid rgba(0, 229, 255, 0.2);
@@ -608,45 +609,70 @@ def render_result_page(df_vdot, df_pace, api_key):
     padding: 1.5rem;
     margin: 1.5rem 0;
 ">
-    <p style="color: #00E5FF; font-size: 1.1rem; font-weight: bold; margin-bottom: 1rem; text-align: center;">
-        📖 計画ができるまで、こちらの記事はいかがですか？
+    <p style="color: #00E5FF; font-size: 1.15rem; font-weight: bold; margin-bottom: 1.1rem; text-align: center;">
+        👟 計画ができるまで、ギア選びをチェックしませんか？
     </p>
-    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-        <a href="https://akirun.net/polar-verity-sense-review/" target="_blank" style="
-            flex: 1; min-width: 250px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 1rem;
-            text-decoration: none;
-            transition: background 0.2s;
-        ">
-            <p style="font-size: 1.3rem; margin-bottom: 0.3rem;">⌚</p>
-            <p style="color: #E2E8F0; font-size: 0.95rem; font-weight: bold; margin-bottom: 0.3rem;">
-                Eペースを心拍で管理する方法
-            </p>
-            <p style="color: #94A3B8; font-size: 0.8rem; margin: 0;">
-                アームバンド型心拍計で心肺機能の成長を高精度に測定 →
-            </p>
-        </a>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: stretch;">
         <a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="
             flex: 1; min-width: 250px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 1rem;
+            display: flex; flex-direction: column; justify-content: center;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            border-radius: 14px;
+            padding: 1.3rem;
             text-decoration: none;
-            transition: background 0.2s;
+            text-align: center;
+            transition: transform .15s ease, background .2s;
         ">
-            <p style="font-size: 1.3rem; margin-bottom: 0.3rem;">👟</p>
-            <p style="color: #E2E8F0; font-size: 0.95rem; font-weight: bold; margin-bottom: 0.3rem;">
+            <p style="font-size: 1.8rem; margin: 0 0 0.4rem;">📖</p>
+            <p style="color: #00E5FF; font-size: 1.05rem; font-weight: 800; margin: 0 0 0.4rem;">
                 マラソンおすすめギア総まとめ
             </p>
-            <p style="color: #94A3B8; font-size: 0.8rem; margin: 0;">
-                シューズ・ウェア・補給を科学的根拠で厳選 →
+            <p style="color: #94A3B8; font-size: 0.82rem; margin: 0 0 0.9rem;">
+                シューズ・ウェア・補給を科学的根拠で厳選
             </p>
+            <span style="
+                display: inline-block; align-self: center;
+                background: rgba(0, 229, 255, 0.15);
+                color: #00E5FF;
+                padding: 0.5rem 1.3rem;
+                border-radius: 8px;
+                border: 1px solid #00E5FF;
+                font-weight: bold; font-size: 0.9rem;
+            ">ガイドを読む →</span>
+        </a>
+        <a href="{AMAZON_STORE_URL}" target="_blank" rel="noopener noreferrer sponsored" style="
+            flex: 1; min-width: 250px;
+            display: flex; flex-direction: column; justify-content: center;
+            background: linear-gradient(135deg, #F4C66B 0%, #E0A23D 100%);
+            border-radius: 14px;
+            padding: 1.3rem;
+            text-decoration: none;
+            text-align: center;
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+            transition: transform .15s ease, filter .15s ease;
+        ">
+            <p style="font-size: 1.8rem; margin: 0 0 0.4rem;">🛒</p>
+            <p style="color: #1F3A6B; font-size: 1.05rem; font-weight: 800; margin: 0 0 0.4rem;">
+                愛用ギア一覧（Amazon）
+            </p>
+            <p style="color: #4a3b14; font-size: 0.82rem; margin: 0 0 0.9rem;">
+                私が実際に使っているシューズ・ギアを用途別に
+            </p>
+            <span style="
+                display: inline-block; align-self: center;
+                background: #1F3A6B;
+                color: #ffffff;
+                padding: 0.55rem 1.5rem;
+                border-radius: 9px;
+                font-weight: 800; font-size: 0.95rem;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            ">Amazonで見る ›</span>
         </a>
     </div>
+    <p style="color: #5a5a6a; font-size: 0.68rem; margin: 0.9rem 0 0; text-align: center;">
+        ※ Amazonのアソシエイトとして適格販売により収入を得ています
+    </p>
 </div>
         """, unsafe_allow_html=True)
         
@@ -752,66 +778,54 @@ def render_result_page(df_vdot, df_pace, api_key):
         
         st.markdown(st.session_state.training_plan)
         
-        # 計画下部: 2カラムCTA
-        col_cta1, col_cta2 = st.columns(2)
-        with col_cta1:
-            st.markdown("""
-            <div style="
-                background: linear-gradient(135deg, #1E3A5F 0%, #0F172A 100%);
-                border: 1px solid #00E5FF;
-                border-radius: 12px;
-                padding: 1.2rem;
-                text-align: center;
-                height: 100%;
-            ">
-                <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">⌚</p>
-                <p style="color: #00E5FF; font-size: 1rem; font-weight: bold; margin-bottom: 0.5rem;">
-                    心拍計の精度で走りが変わる
-                </p>
-                <p style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 0.8rem;">
-                    心肺機能の成長を<br>高精度心拍計で測定
-                </p>
-                <a href="https://akirun.net/polar-verity-sense-review/" target="_blank" style="
-                    display: inline-block;
-                    background: linear-gradient(135deg, #00E5FF 0%, #0EA5E9 100%);
-                    color: #0F172A;
-                    padding: 0.5rem 1.2rem;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: bold;
-                    font-size: 0.9rem;
-                ">レビューを読む →</a>
-            </div>
-            """, unsafe_allow_html=True)
-        with col_cta2:
-            st.markdown("""
-            <div style="
-                background: linear-gradient(135deg, #1E3A5F 0%, #0F172A 100%);
-                border: 1px solid #00E5FF;
-                border-radius: 12px;
-                padding: 1.2rem;
-                text-align: center;
-                height: 100%;
-            ">
-                <p style="font-size: 1.5rem; margin-bottom: 0.3rem;">👟</p>
-                <p style="color: #00E5FF; font-size: 1rem; font-weight: bold; margin-bottom: 0.5rem;">
-                    ギア選びで差をつける
-                </p>
-                <p style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 0.8rem;">
-                    練習効率とレース本番のパフォーマンスを<br>最大化する厳選ギア
-                </p>
-                <a href="https://akirun.net/marathon-gear-recommend/" target="_blank" style="
-                    display: inline-block;
-                    background: linear-gradient(135deg, #00E5FF 0%, #0EA5E9 100%);
-                    color: #0F172A;
-                    padding: 0.5rem 1.2rem;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: bold;
-                    font-size: 0.9rem;
-                ">おすすめギアを見る →</a>
-            </div>
-            """, unsafe_allow_html=True)
+        # 計画下部: Amazon主CTA（ゴールド・ヒーローカード）
+        st.markdown(f"""
+<div style="
+    background: linear-gradient(135deg, #F4C66B 0%, #E0A23D 100%);
+    border-radius: 16px;
+    padding: 2rem 1.5rem 1.6rem;
+    margin: 1.5rem 0 0.6rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+">
+    <div style="
+        position: absolute;
+        top: -1px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #FF6B6B, #FF4757);
+        color: white;
+        padding: 0.25rem 1.2rem;
+        border-radius: 0 0 8px 8px;
+        font-size: 0.72rem;
+        font-weight: bold;
+        letter-spacing: 0.5px;
+    ">🔥 ランナーに人気</div>
+    <p style="font-size: 2.2rem; margin: 1.1rem 0 0.2rem;">🛒</p>
+    <p style="color: #1F3A6B; font-weight: 800; font-size: clamp(1.15rem, 4.6vw, 1.5rem); margin: 0 0 0.5rem;">
+        この計画を支えるギアをAmazonで
+    </p>
+    <p style="color: #4a3b14; font-size: clamp(0.85rem, 3.2vw, 0.98rem); line-height: 1.6; margin: 0 auto 1.3rem; max-width: 34em;">
+        私が実走で使っているシューズ・ウェア・補給を、用途別にAmazonのおすすめリストにまとめました。毎日の練習とレース本番に効く一足・一品を探す入口にどうぞ。
+    </p>
+    <a href="{AMAZON_STORE_URL}" target="_blank" rel="noopener noreferrer sponsored" style="
+        display: inline-block;
+        background: #1F3A6B;
+        color: #ffffff;
+        padding: 0.95rem 2.4rem;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: 800;
+        font-size: clamp(1rem, 3.8vw, 1.2rem);
+        box-shadow: 0 5px 16px rgba(0, 0, 0, 0.3);
+    ">🛒 愛用ギア一覧（Amazon）を見る ›</a>
+    <p style="color: #5a4a1f; font-size: 0.72rem; margin: 1rem 0 0;">
+        ※ Amazonのアソシエイトとして適格販売により収入を得ています
+    </p>
+</div>
+        """, unsafe_allow_html=True)
         
         # ダウンロードボタン
         st.markdown("---")

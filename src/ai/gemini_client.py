@@ -14,6 +14,7 @@ import json
 from ..config import (
     APP_NAME,
     APP_VERSION,
+    AMAZON_STORE_URL,
     GEMINI_DEFAULT_MODEL,
     GEMINI_TEMPERATURE,
     GEMINI_TOP_P,
@@ -512,22 +513,22 @@ def convert_json_to_markdown(json_str: str, user_data: dict = None) -> str:
             
             md.append(f"\n週間走行距離: {week.get('total_distance', '')}\n")
             
-            # フェーズ切り替わりにコンテキストCTAを挿入
+            # フェーズ切り替わりにコンテキストCTAを挿入（Amazonおすすめギア一覧へ送客）
             if weeks_per_phase > 0 and week_num == weeks_per_phase:
-                # Phase 1 終了後: 心拍トレーニング訴求
+                # Phase 1 終了後: 練習ギア訴求
                 md.append("---")
                 md.append("💡 **基礎構築期を終えたあなたへ** ── "
-                          "Eペースを「感覚」ではなく「心拍数」で管理すると、有酸素ベースの構築がより確実になります。")
-                md.append("[👉 光学式心拍計 Polar Verity Sense レビュー →]"
-                          "(https://akirun.net/polar-verity-sense-review/)\n")
+                          "練習の質を上げるなら、デイリートレーナーや心拍計などのギア選びも大切です。私が実走で使っている練習ギアを用途別にまとめています。")
+                md.append(f"[🛒 愛用ギア一覧（Amazon）を見る →]({AMAZON_STORE_URL})\n")
+                md.append("※ Amazonのアソシエイトとして適格販売により収入を得ています\n")
                 md.append("---\n")
             elif weeks_per_phase > 0 and week_num == weeks_per_phase * 3:
                 # Phase 3 終了後: レース準備訴求
                 md.append("---")
                 md.append("🏃 **レース本番が近づいてきました** ── "
-                          "シューズ・補給・ウェアの準備は万全ですか？科学的根拠に基づいたギア選びで、練習の成果を最大限に発揮しましょう。")
-                md.append("[👉 マラソンおすすめギア総まとめ →]"
-                          "(https://akirun.net/marathon-gear-recommend/)\n")
+                          "シューズ・補給・ウェアの準備は万全ですか？私が実走で使っているレース用シューズや補給を、用途別にAmazonのおすすめリストにまとめています。")
+                md.append(f"[🛒 愛用ギア一覧（Amazon）を見る →]({AMAZON_STORE_URL})\n")
+                md.append("※ Amazonのアソシエイトとして適格販売により収入を得ています\n")
                 md.append("---\n")
         
         # 6. 注意事項

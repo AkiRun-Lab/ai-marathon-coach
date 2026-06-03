@@ -7,7 +7,11 @@ AI Marathon Coach - Configuration
 # アプリ情報
 # =============================================
 APP_NAME = "マラソントレーニング・プランナー"
-APP_VERSION = "1.9.0"
+APP_VERSION = "1.10.0"
+
+# Amazonストアフロント（おすすめギア一覧）への送客先。
+# 当面はストアトップ。個別アイデアリストの短縮URLが用意できたら差し替える。
+AMAZON_STORE_URL = "https://www.amazon.co.jp/shop/yancearmstron"
 
 # =============================================
 # Gemini API Configuration (Corrected for Gemini 3)
