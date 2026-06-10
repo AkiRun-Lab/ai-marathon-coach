@@ -1,5 +1,15 @@
 # マラソントレーニング・プランナー 更新履歴
 
+## v1.10.1 (2026-06-11)
+
+### 🤖 Gemini 3.5 Flash 移行
+- 計画生成モデルを `gemini-3-flash-preview` から正式版 `gemini-3.5-flash` に移行（`GEMINI_AVAILABLE_MODELS`・`GEMINI_DEFAULT_MODEL`）。
+- 思考パラメータを `thinking_budget`（数値）から推奨の `thinking_level`（段階）へ移行。深い推論を要するため `"high"` を指定（`GEMINI_THINKING_LEVEL`）。
+- `temperature` / `top_p` を全リクエストから削除。Gemini 3.x ではこれらサンプリングパラメータが非推奨化され、デフォルト設定が最適化済みのため（公式ドキュメント準拠）。
+- `requirements.txt` の `google-genai` を `>=2.7.0` に引き上げ（`thinking_level` 対応バージョンを保証）。
+
+---
+
 ## v1.10.0 (2026-06-03)
 
 ### 💰 収益導線（Amazonストア動線化）

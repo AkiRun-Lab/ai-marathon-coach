@@ -16,13 +16,11 @@ from ..config import (
     APP_VERSION,
     AMAZON_STORE_URL,
     GEMINI_DEFAULT_MODEL,
-    GEMINI_TEMPERATURE,
-    GEMINI_TOP_P,
     GEMINI_MAX_OUTPUT_TOKENS,
     NUM_PHASES,
     GEMINI_RESPONSE_MIME_TYPE,
     GEMINI_THINKING_MODE,
-    GEMINI_THINKING_BUDGET,
+    GEMINI_THINKING_LEVEL,
     get_max_output_tokens,
 )
 from ..vdot import (
@@ -60,13 +58,11 @@ class GeminiClient:
                 model=self.model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=GEMINI_TEMPERATURE,
-                    top_p=GEMINI_TOP_P,
                     max_output_tokens=effective_max_tokens,
                     response_mime_type=GEMINI_RESPONSE_MIME_TYPE,
                     thinking_config=types.ThinkingConfig(
                         include_thoughts=True,
-                        thinking_budget=GEMINI_THINKING_BUDGET,
+                        thinking_level=GEMINI_THINKING_LEVEL,
                     ) if GEMINI_THINKING_MODE else None,
                 ),
             )

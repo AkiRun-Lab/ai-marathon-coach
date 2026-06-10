@@ -7,36 +7,35 @@ AI Marathon Coach - Configuration
 # アプリ情報
 # =============================================
 APP_NAME = "マラソントレーニング・プランナー"
-APP_VERSION = "1.10.0"
+APP_VERSION = "1.10.1"
 
 # Amazonストアフロント（おすすめギア一覧）への送客先。
 # 当面はストアトップ。個別アイデアリストの短縮URLが用意できたら差し替える。
 AMAZON_STORE_URL = "https://www.amazon.co.jp/shop/yancearmstron"
 
 # =============================================
-# Gemini API Configuration (Corrected for Gemini 3)
+# Gemini API Configuration (Gemini 3.5)
 # =============================================
 GEMINI_AVAILABLE_MODELS = {
-    "gemini-3-flash-preview": "Gemini 3 Flash（高性能）",
+    "gemini-3.5-flash": "Gemini 3.5 Flash（高性能）",
     "gemini-3.1-flash-lite-preview": "Gemini 3.1 Flash Lite（軽量・高速）",
 }
-GEMINI_DEFAULT_MODEL = "gemini-3-flash-preview"
+GEMINI_DEFAULT_MODEL = "gemini-3.5-flash"
 
 # Generation Config
-# VDOT計算の正確性を担保するため、創造性を抑える
-GEMINI_TEMPERATURE = 0.1
-GEMINI_TOP_P = 0.95
+# 注: temperature / top_p / top_k は全 Gemini 3.x モデルで非推奨となり削除（公式: デフォルト設定が最適化済み）
 GEMINI_MAX_OUTPUT_TOKENS = 16384  # 最低保証値
 
 # Response Format
 GEMINI_RESPONSE_MIME_TYPE = "application/json"
 
-# Thinking Config (Gemini 3 Spec)
-# thinking_budget: VDOT計算や週間走行距離の整合性チェックなど、深い推論を行わせるための思考予算
+# Thinking Config (Gemini 3.5 Spec)
+# thinking_level: VDOT計算や週間走行距離の整合性チェックなど、深い推論を行わせるための思考レベル
+# 値は minimal / low / medium(デフォルト) / high。深い推論を要するため high を指定
 GEMINI_THINKING_MODE = True
-GEMINI_THINKING_BUDGET = 8192
+GEMINI_THINKING_LEVEL = "high"
 
-# Gemini 3 Flashの最大出力トークン数
+# Gemini 3.5 Flashの最大出力トークン数
 GEMINI_MAX_OUTPUT_TOKENS_LIMIT = 65536
 
 def get_max_output_tokens(training_weeks: int) -> int:
