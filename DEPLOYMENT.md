@@ -8,7 +8,7 @@
 |:-----|:-----|
 | ホスティング | Streamlit Community Cloud（無料） |
 | リポジトリ | https://github.com/AkiRun-Lab/ai-marathon-coach |
-| 公開URL | https://ai-marathon-coach.streamlit.app/ |
+| 公開URL | https://akirun-ai-marathon-coach.streamlit.app/ |
 
 ---
 

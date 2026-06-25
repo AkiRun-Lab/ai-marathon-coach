@@ -8,7 +8,7 @@
 | バージョン | 1.9.0 |
 | 目的 | ジャック・ダニエルズ理論に基づくマラソントレーニング計画の自動生成 |
 | 技術スタック | Python, Streamlit, Google Gemini 3 API |
-| 公開URL | https://ai-marathon-coach.streamlit.app/ |
+| 公開URL | https://akirun-ai-marathon-coach.streamlit.app/ |
 
 ---
 

@@ -4,7 +4,7 @@
 
 マラソントレーニング・プランナーは、ジャック・ダニエルズ博士の「ランニング・フォーミュラ」に基づき、あなた専用のマラソントレーニング計画を自動生成するWebアプリケーションです。
 
-**公開URL**: https://ai-marathon-coach.streamlit.app/
+**公開URL**: https://akirun-ai-marathon-coach.streamlit.app/
 
 ---
 

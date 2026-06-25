@@ -10,7 +10,7 @@
 
 ## 🚀 今すぐアプリを使う（完全無料・登録不要）
 以下のリンクからブラウザ上で今すぐメニューを作成できます。
-👉 **[マラソントレーニング・プランナーを使ってみる](https://ai-marathon-coach.streamlit.app/)**
+👉 **[マラソントレーニング・プランナーを使ってみる](https://akirun-ai-marathon-coach.streamlit.app/)**
 
 ---
 

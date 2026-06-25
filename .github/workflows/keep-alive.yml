@@ -31,58 +31,24 @@ jobs:
           cat > wake.js << 'EOF'
           const { chromium } = require('playwright');
           (async () => {
-            // bot 検出回避：Streamlit Cloud はヘッドレスブラウザを not_found にリダイレクトするため
-            const browser = await chromium.launch({
-              args: ['--disable-blink-features=AutomationControlled']
-            });
-            const context = await browser.newContext({
-              userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              extraHTTPHeaders: {
-                'Accept-Language': 'ja,en;q=0.9',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-              }
-            });
-            const page = await context.newPage();
-            // navigator.webdriver を隠して自動化ブラウザとして検出されないようにする
-            await page.addInitScript(() => {
-              Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            });
-
-            const url = 'https://ai-marathon-coach.streamlit.app/';
+            const browser = await chromium.launch();
+            const page = await browser.newPage();
+            const url = 'https://akirun-ai-marathon-coach.streamlit.app/';
             console.log(`[${new Date().toISOString()}] Accessing ${url} ...`);
             try {
+              // スリープ中は networkidle にならないため domcontentloaded を使用
+              // タイムアウトしても wake ボタン検知を続けるため catch で握りつぶす
               await page.goto(url, { timeout: 30000, waitUntil: 'domcontentloaded' }).catch(() => {});
               // SPA描画を待つ（スリープページはJSで描画される）
-              await page.waitForTimeout(20000);
-
-              const title = await page.title().catch(() => '');
-              const currentUrl = page.url();
-              const htmlContent = await page.content().catch(() => '');
-              console.log(`DEBUG: title="${title}", url="${currentUrl}"`);
-
-              // スリープ検出1（旧仕様）：スリープ画面のボタン・テキスト・タイトルで判定
-              const titleLower = title.toLowerCase();
-              const isOldStyleSleep =
-                titleLower.includes('sleep') || titleLower.includes('asleep') ||
-                ['gone to sleep', 'asleep', 'get this app back up'].some(kw => htmlContent.toLowerCase().includes(kw));
-
-              // スリープ検出2（フォールバック）：bot 判定で not_found にリダイレクトされた場合
-              const isNotFound = currentUrl.includes('/errors/not_found') || title.includes('Not found');
-
-              let isSleeping = isOldStyleSleep || isNotFound;
-              console.log(`DEBUG: isSleeping=${isSleeping}, isOldStyleSleep=${isOldStyleSleep}, isNotFound=${isNotFound}`);
-
+              await page.waitForTimeout(8000);
+              // false-green 防止：到達先を必ずログに出す（not_found に飛んでいないか確認用）
+              console.log(`DEBUG: url="${page.url()}", title="${await page.title().catch(() => '')}"`);
+              // Streamlit のスリープページには "Yes, get this app back up!" ボタンがある
+              const wakeBtn = page.getByRole('button', { name: /get this app back up/i });
+              const isSleeping = await wakeBtn.isVisible({ timeout: 15000 }).catch(() => false);
               if (isSleeping) {
-                // スリープ画面のウェイクボタンをクリック（旧仕様）
-                const wakeBtn = page.getByRole('button', { name: /get this app back up/i });
-                if (await wakeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-                  await wakeBtn.click();
-                  console.log('Clicked wake button.');
-                } else {
-                  console.log('Wake button not found. Re-accessing to trigger wake-up...');
-                  await page.goto(url, { timeout: 60000, waitUntil: 'domcontentloaded' }).catch(() => {});
-                }
-                console.log('STATUS: SLEEPING - Wake-up triggered. Waiting for boot...');
+                console.log('STATUS: SLEEPING - Clicking wake-up button...');
+                await wakeBtn.click();
                 await page.waitForTimeout(90000);
                 console.log('Wake-up request sent. App should be starting.');
                 process.exitCode = 1; // GitHub にメール通知させる
