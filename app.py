@@ -63,6 +63,12 @@ def init_session_state():
         "training_weeks": 12,
         "start_date": None,
         "selected_model": GEMINI_DEFAULT_MODEL,
+        # 計画生成の状態管理: pending（未生成）/ running（生成中）/ done / error
+        "generation_state": "pending",
+        "generation_error": None,
+        "generation_thread": None,
+        "api_result": None,
+        "generation_start_time": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -447,6 +453,12 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     
     st.session_state.training_weeks = training_weeks
     st.session_state.start_date = start_date
+    # 生成状態をリセット（前回の計画・エラー・スレッド参照を破棄）
+    st.session_state.training_plan = None
+    st.session_state.generation_state = "pending"
+    st.session_state.generation_error = None
+    st.session_state.generation_thread = None
+    st.session_state.api_result = None
     st.session_state.form_submitted = True
     st.rerun()
 
@@ -597,7 +609,17 @@ def render_result_page(df_vdot, df_pace, api_key):
     render_phase_table(vdot_info['vdot'], effective_target_vdot, training_weeks)
     
     # トレーニング計画生成
-    if not st.session_state.training_plan:
+    # 状態機械: pending（未生成）→ running（生成中）→ done / error
+    # - 自動再実行はしない（エラー時は「再生成する」ボタンからのみ再実行）
+    # - 生成中にrerunが起きても、session_stateに保持したスレッドへ再接続する（APIの二重コール防止）
+    gen_state = st.session_state.get("generation_state", "pending")
+
+    # 復旧ガード: running なのにスレッド参照が無い場合は未生成扱いに戻す
+    if gen_state == "running" and st.session_state.get("generation_thread") is None:
+        gen_state = "pending"
+        st.session_state.generation_state = "pending"
+
+    if not st.session_state.training_plan and gen_state != "error":
         st.toast("🏃 トレーニング計画を作成中です。1〜2分お待ちください...", icon="🏃")
         
         # 待ち時間コンテンツ（スピナーの下に表示）
@@ -676,36 +698,49 @@ def render_result_page(df_vdot, df_pace, api_key):
 </div>
         """, unsafe_allow_html=True)
         
-        try:
-            selected_model = st.session_state.get('selected_model', GEMINI_DEFAULT_MODEL)
-            client = GeminiClient(api_key, model_name=selected_model)
-            effective_target_vdot_for_prompt = {"vdot": effective_target_vdot}
-            prompt = create_training_prompt(
-                user_data, vdot_info, pace_info, effective_target_vdot_for_prompt,
-                df_pace, training_weeks, start_date, df_vdot
-            )
-            max_tokens = get_max_output_tokens(training_weeks)
-            MAX_RETRIES = 2
+        MAX_RETRIES = 2
 
-            # APIコールをバックグラウンドスレッドで実行
-            api_result = {'response': None, 'error': None}
+        if gen_state == "pending":
+            # 生成開始: スレッドと結果コンテナをsession_stateに保持してから起動する
+            try:
+                selected_model = st.session_state.get('selected_model', GEMINI_DEFAULT_MODEL)
+                client = GeminiClient(api_key, model_name=selected_model)
+                effective_target_vdot_for_prompt = {"vdot": effective_target_vdot}
+                prompt = create_training_prompt(
+                    user_data, vdot_info, pace_info, effective_target_vdot_for_prompt,
+                    df_pace, training_weeks, start_date, df_vdot
+                )
+                max_tokens = get_max_output_tokens(training_weeks)
 
-            def run_api_call():
-                for attempt in range(MAX_RETRIES + 1):
-                    try:
-                        response = client.generate_content(prompt, max_output_tokens=max_tokens)
-                        api_result['response'] = response
-                        return
-                    except Exception as e:
-                        if attempt < MAX_RETRIES:
-                            time.sleep(2 ** (attempt + 1))
-                        else:
-                            api_result['error'] = e
+                # APIコールをバックグラウンドスレッドで実行
+                api_result = {'response': None, 'error': None}
 
-            thread = threading.Thread(target=run_api_call, daemon=True)
-            thread.start()
+                def run_api_call():
+                    for attempt in range(MAX_RETRIES + 1):
+                        try:
+                            response = client.generate_content(prompt, max_output_tokens=max_tokens)
+                            api_result['response'] = response
+                            return
+                        except Exception as e:
+                            if attempt < MAX_RETRIES:
+                                time.sleep(2 ** (attempt + 1))
+                            else:
+                                api_result['error'] = e
 
-            # メインスレッドでプログレスバーを更新
+                thread = threading.Thread(target=run_api_call, daemon=True)
+                st.session_state.api_result = api_result
+                st.session_state.generation_thread = thread
+                st.session_state.generation_start_time = time.time()
+                st.session_state.generation_state = "running"
+                thread.start()
+
+            except Exception as e:
+                st.session_state.generation_state = "error"
+                st.session_state.generation_error = f"処理中にエラーが発生しました: {str(e)}"
+
+        # 進捗表示と結果回収（生成中のrerun後もここで同じスレッドに再接続する）
+        thread = st.session_state.get("generation_thread")
+        if thread is not None:
             progress_bar = st.progress(0.0, text="🏃 トレーニング計画を生成中...（1〜2分かかります）")
             ESTIMATED_SECONDS = 90
             PHASE_MESSAGES = [
@@ -716,7 +751,7 @@ def render_result_page(df_vdot, df_pace, api_key):
                 (0.90, "📝 仕上げをしています..."),
             ]
 
-            start_time = time.time()
+            start_time = st.session_state.get("generation_start_time") or time.time()
             while thread.is_alive():
                 elapsed = time.time() - start_time
                 progress = min(0.95, elapsed / ESTIMATED_SECONDS)
@@ -732,45 +767,60 @@ def render_result_page(df_vdot, df_pace, api_key):
             time.sleep(0.4)
             progress_bar.empty()
 
-            # エラー処理
+            api_result = st.session_state.get("api_result") or {'response': None, 'error': None}
+            # スレッドは回収済み。以後のrerunで再接続・再実行されないよう破棄する
+            st.session_state.generation_thread = None
+            st.session_state.api_result = None
+
+            # エラー処理（自動再実行はせず、エラー状態として保存する）
             if api_result['error'] is not None:
                 err_str = str(api_result['error'])
                 if "503_SERVICE_UNAVAILABLE" in err_str:
-                    st.error(f"⚠️ サーバーが混雑しているため応答できませんでした（{MAX_RETRIES+1}回試行）。しばらく待ってから再度お試しください。")
+                    error_msg = f"⚠️ サーバーが混雑しているため応答できませんでした（{MAX_RETRIES+1}回試行）。しばらく待ってから再度お試しください。"
                 elif "429_RATE_LIMITED" in err_str:
-                    st.error(f"⚠️ APIのリクエスト上限に達しました（{MAX_RETRIES+1}回試行）。時間をおいてから再度お試しください。")
+                    error_msg = f"⚠️ APIのリクエスト上限に達しました（{MAX_RETRIES+1}回試行）。時間をおいてから再度お試しください。"
                 else:
-                    st.error(f"APIエラーが発生しました（{MAX_RETRIES+1}回試行）: {err_str}")
-                st.session_state.training_plan = None
+                    error_msg = f"APIエラーが発生しました（{MAX_RETRIES+1}回試行）: {err_str}"
+                st.session_state.generation_state = "error"
+                st.session_state.generation_error = error_msg
 
             elif not api_result['response']:
-                st.error("⚠️ AIからの応答が空でした。混雑している可能性があります。時間をおいて再試行してください。")
-                st.session_state.training_plan = None
+                st.session_state.generation_state = "error"
+                st.session_state.generation_error = "⚠️ AIからの応答が空でした。混雑している可能性があります。時間をおいて再生成をお試しください。"
 
             else:
                 response = api_result['response']
-                # JSONからMarkdownへの変換
+                # JSONからMarkdownへの変換（失敗時はNoneが返る）
                 from src.ai.gemini_client import convert_json_to_markdown
                 markdown_plan = convert_json_to_markdown(response, user_data=user_data)
 
-                # 週数チェック（警告のみ、ブロックはしない）
-                import json
-                try:
-                    json_data = json.loads(response.strip().lstrip('```json').lstrip('```').rstrip('```'))
-                    plan_data = json_data.get('plan', json_data) if isinstance(json_data, dict) else json_data
-                    if isinstance(plan_data, dict):
-                        actual_weeks = len(plan_data.get('weekly_schedules', []))
-                        if actual_weeks < training_weeks:
-                            st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
-                except (json.JSONDecodeError, AttributeError):
-                    pass
+                if markdown_plan is None:
+                    st.session_state.generation_state = "error"
+                    st.session_state.generation_error = "⚠️ AIの応答データの変換に失敗しました。お手数ですが「再生成する」ボタンをお試しください。"
+                else:
+                    # 週数チェック（警告のみ、ブロックはしない）
+                    import json
+                    try:
+                        json_data = json.loads(response.strip().lstrip('```json').lstrip('```').rstrip('```'))
+                        plan_data = json_data.get('plan', json_data) if isinstance(json_data, dict) else json_data
+                        if isinstance(plan_data, dict):
+                            actual_weeks = len(plan_data.get('weekly_schedules', []))
+                            if actual_weeks < training_weeks:
+                                st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
 
-                st.session_state.training_plan = markdown_plan
+                    st.session_state.training_plan = markdown_plan
+                    st.session_state.generation_state = "done"
 
-        except Exception as e:
-            st.error(f"処理中にエラーが発生しました: {str(e)}")
-            st.session_state.training_plan = None
-    
+    # 生成エラーの表示と再生成ボタン（rerunによる自動再実行はしない）
+    if st.session_state.get("generation_state") == "error" and not st.session_state.training_plan:
+        st.error(st.session_state.get("generation_error") or "エラーが発生しました。")
+        if st.button("🔄 再生成する", use_container_width=True, type="primary"):
+            st.session_state.generation_state = "pending"
+            st.session_state.generation_error = None
+            st.rerun()
+
     # トレーニング計画表示
     if st.session_state.training_plan:
         st.markdown("---")

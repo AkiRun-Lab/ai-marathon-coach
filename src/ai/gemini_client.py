@@ -371,12 +371,16 @@ def _repair_json(json_str: str) -> str:
     return repaired
 
 
-def convert_json_to_markdown(json_str: str, user_data: dict = None) -> str:
+def convert_json_to_markdown(json_str: str, user_data: dict = None) -> Optional[str]:
     """GeminiのJSON応答をMarkdown形式に変換する
-    
+
     Args:
         json_str: GeminiのJSON応答文字列
         user_data: ユーザー入力データ（中間目標情報の注入に使用）
+
+    Returns:
+        Markdown文字列。パース・変換に失敗した場合はNone
+        （エラー文字列を返すと呼び出し側で「成功した計画」として扱われてしまうため）
     """
     try:
         # JSON文字列のクリーニング（Markdownコードブロックなどで囲まれている場合の対策）
@@ -398,8 +402,8 @@ def convert_json_to_markdown(json_str: str, user_data: dict = None) -> str:
             try:
                 data = json.loads(repaired)
             except json.JSONDecodeError:
-                # 修復も失敗した場合はエラーメッセージを返す
-                return "⚠️ AIの応答データに問題がありました。お手数ですが、ページを再読み込みして再度お試しください。"
+                # 修復も失敗
+                return None
         
         # 配列のトップレベルか、オブジェクト内のplanかを確認
         plan = {}
@@ -542,8 +546,11 @@ def convert_json_to_markdown(json_str: str, user_data: dict = None) -> str:
         
         return "\n".join(md)
 
-    except Exception as e:
-        return f"⚠️ データの変換中にエラーが発生しました。お手数ですが、ページを再読み込みして再度お試しください。\n\n詳細: {str(e)}"
+    except Exception:
+        # 詳細はサーバーログへ（ユーザーへの表示は呼び出し側がNone判定で行う）
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 
