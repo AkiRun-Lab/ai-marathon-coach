@@ -146,6 +146,8 @@ def calculate_vdot_from_time(df_vdot: pd.DataFrame, distance: str, time_seconds:
         ratio = (time_low - time_seconds) / (time_low - time_high)
         calculated_vdot = vdot_low + (vdot_high - vdot_low) * ratio
     else:
+        # 参照タイムが同値の場合は補間できない（ratioは後続の計算ログでも使うため必ず定義する）
+        ratio = 0.0
         calculated_vdot = vdot_low
     
     result["vdot"] = round(calculated_vdot, 2)

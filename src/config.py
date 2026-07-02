@@ -24,7 +24,9 @@ GEMINI_DEFAULT_MODEL = "gemini-3.5-flash"
 
 # Generation Config
 # 注: temperature / top_p / top_k は全 Gemini 3.x モデルで非推奨となり削除（公式: デフォルト設定が最適化済み）
-GEMINI_MAX_OUTPUT_TOKENS = 16384  # 最低保証値
+# 注: thinkingトークンも max_output_tokens を消費するため、計画本文の必要量に思考分の余裕を上乗せした床値にする
+#     （16384だと12週計画の本文約16,400トークンでギリギリ→JSON途中切断の一因になりうるため24576へ引き上げ・2026-07）
+GEMINI_MAX_OUTPUT_TOKENS = 24576  # 最低保証値
 
 # Response Format
 GEMINI_RESPONSE_MIME_TYPE = "application/json"
@@ -42,7 +44,7 @@ def get_max_output_tokens(training_weeks: int) -> int:
     """トレーニング週数に応じた最大出力トークン数を返す
     
     1週あたり約1200トークン（7日×各行約170トークン）+ ヘッダー等のオーバーヘッド
-    最低16384、最大65536を保証。
+    最低GEMINI_MAX_OUTPUT_TOKENS（24576）、最大65536を保証。
     
     Args:
         training_weeks: トレーニング週数

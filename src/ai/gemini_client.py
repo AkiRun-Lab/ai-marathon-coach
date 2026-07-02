@@ -60,8 +60,9 @@ class GeminiClient:
                 config=types.GenerateContentConfig(
                     max_output_tokens=effective_max_tokens,
                     response_mime_type=GEMINI_RESPONSE_MIME_TYPE,
+                    # include_thoughts は指定しない（思考サマリーは未使用。応答への混入リスクと
+                    # レスポンスサイズ増を避ける。思考自体は thinking_level で有効）
                     thinking_config=types.ThinkingConfig(
-                        include_thoughts=True,
                         thinking_level=GEMINI_THINKING_LEVEL,
                     ) if GEMINI_THINKING_MODE else None,
                 ),
