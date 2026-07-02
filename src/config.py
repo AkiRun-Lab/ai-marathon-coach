@@ -2,6 +2,19 @@
 AI Marathon Coach - Configuration
 アプリケーション全体の設定値を管理
 """
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+
+def jst_now() -> datetime:
+    """日本時間の現在時刻をnaive datetimeで返す
+
+    本番（Streamlit Cloud）はUTCで動くため、素の datetime.now() では
+    日本の利用者と最大9時間ズレる（開始日の月曜計算・レースまでの週数に影響）。
+    既存コードはnaive datetime同士の演算を前提としているため、tzinfoは外して返す。
+    """
+    return datetime.now(ZoneInfo("Asia/Tokyo")).replace(tzinfo=None)
+
 
 # =============================================
 # アプリ情報

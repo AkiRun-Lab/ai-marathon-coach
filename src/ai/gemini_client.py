@@ -168,20 +168,18 @@ def create_training_prompt(
     if adjusted_target_vdot and df_vdot is not None:
         adjusted_marathon_time = calculate_marathon_time_from_vdot(df_vdot, adjusted_target_vdot)
     
-    # 過去遡り開始の判定
-    today = datetime.now()
-    is_past_start = start_date < today
-    
     # VDOT調整の説明文
     vdot_adjustment_note = ""
     if adjusted_target_vdot and original_target_vdot and adjusted_target_vdot != original_target_vdot:
+        # 許容VDOT差は走力・期間に応じて動的（get_max_vdot_diff）。UI表示と矛盾しないよう実値を使う
+        max_vdot_diff = user_data.get('max_vdot_diff', round(adjusted_target_vdot - current_vdot, 1))
         vdot_adjustment_note = f"""
 ## ⚠️ 目標VDOTの調整について（情報）
 
-ユーザーが入力した目標タイム（{user_data.get('target_time', '')}、VDOT {original_target_vdot}）と現在のVDOT（{current_vdot}）の差が3.0を超えています。
+ユーザーが入力した目標タイム（{user_data.get('target_time', '')}、VDOT {original_target_vdot}）と現在のVDOT（{current_vdot}）の差が許容値{max_vdot_diff}を超えています。
 今回のトレーニング計画では中間目標を設定しています：
 
-- 中間目標VDOT: {adjusted_target_vdot}（VDOT差 3.0）
+- 中間目標VDOT: {adjusted_target_vdot}（VDOT差 {max_vdot_diff}）
 - 中間目標マラソンタイム: {adjusted_marathon_time}
 - 最終目標: VDOT {original_target_vdot} / {user_data.get('target_time', '')}
 

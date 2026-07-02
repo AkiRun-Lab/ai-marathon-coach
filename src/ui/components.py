@@ -2,6 +2,7 @@
 AI Marathon Coach - UI Components
 再利用可能なUIコンポーネント
 """
+import html
 import os
 import streamlit as st
 
@@ -81,10 +82,13 @@ def render_vdot_display(user_name: str, vdot_info: dict, target_vdot: dict,
     target_vdot_display = ""
     if target_vdot and target_vdot.get("vdot"):
         target_vdot_display = f'<span style="margin-left: 2rem;">🎯 目標VDOT: <strong>{target_vdot["vdot"]}</strong></span>'
-    
+
+    # ユーザー入力をunsafe_allow_htmlのHTMLに埋め込むためエスケープする
+    safe_user_name = html.escape(user_name or "")
+
     st.markdown(f"""
 <div class="vdot-display">
-    <h3 style="margin: 0 0 1rem 0; color: white;">📊 {user_name}さんのVDOT計算結果</h3>
+    <h3 style="margin: 0 0 1rem 0; color: white;">📊 {safe_user_name}さんのVDOT計算結果</h3>
     <div style="font-size: 1.3rem; margin-bottom: 1rem;">
         🏃 現在のVDOT: <strong>{vdot_info['vdot']}</strong>{target_vdot_display}
         <span style="margin-left: 2rem;">📈 VDOT差: <strong>{vdot_diff}</strong></span>

@@ -5,6 +5,7 @@
 Version: 1.0.0
 """
 
+import re
 import streamlit as st
 import time
 import threading
@@ -14,7 +15,7 @@ from datetime import datetime, timedelta
 from src.config import (
     APP_NAME, APP_VERSION, MIN_TRAINING_WEEKS,
     get_max_vdot_diff, validate_training_conditions,
-    get_max_output_tokens,
+    get_max_output_tokens, jst_now,
     GEMINI_AVAILABLE_MODELS, GEMINI_DEFAULT_MODEL,
     AMAZON_STORE_URL,
 )
@@ -269,7 +270,11 @@ def render_input_form(df_vdot, df_pace):
         with col1:
             st.markdown('本番レース名 <span style="background-color: #E53935; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 4px;">必須</span>', unsafe_allow_html=True)
             race_name = st.text_input("本番レース名", placeholder="例: 東京マラソン", label_visibility="collapsed")
-            race_date = st.date_input("本番レース日", value=datetime.now() + timedelta(days=90))
+            race_date = st.date_input(
+                "本番レース日",
+                value=jst_now().date() + timedelta(days=90),
+                min_value=jst_now().date(),  # 過去日付は選択不可（週数が負になるのを防ぐ）
+            )
         with col2:
             st.markdown('練習レース <span style="background-color: #1976D2; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 4px;">任意</span>', unsafe_allow_html=True)
             practice_races = st.text_area("練習レース", placeholder="例: 1/11 NYハーフ\n1/18 赤羽ハーフ", height=100, label_visibility="collapsed")
@@ -368,7 +373,7 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     
     # トレーニング期間の計算（VDOT差判定に必要なため先に計算）
     race_dt = datetime.combine(race_date, datetime.min.time())
-    today = datetime.now()
+    today = jst_now()
     days_until_race = (race_dt - today).days
     actual_weeks = days_until_race // 7
     
@@ -581,7 +586,7 @@ def render_result_page(df_vdot, df_pace, api_key):
         """, unsafe_allow_html=True)
     
     # トレーニング期間の警告（12週未満の場合のみ）
-    today = datetime.now()
+    today = jst_now()
     days_until_race = (datetime.strptime(user_data.get("race_date", ""), "%Y-%m-%d") - today).days
     weeks_until_race = days_until_race // 7
     
@@ -722,10 +727,15 @@ def render_result_page(df_vdot, df_pace, api_key):
                             api_result['response'] = response
                             return
                         except Exception as e:
-                            if attempt < MAX_RETRIES:
+                            # リトライは一時的なエラー（503/429）のみ。認証エラー等の確定失敗は即時終了
+                            err_str = str(e)
+                            retryable = ("503_SERVICE_UNAVAILABLE" in err_str
+                                         or "429_RATE_LIMITED" in err_str)
+                            if retryable and attempt < MAX_RETRIES:
                                 time.sleep(2 ** (attempt + 1))
                             else:
                                 api_result['error'] = e
+                                return
 
                 thread = threading.Thread(target=run_api_call, daemon=True)
                 st.session_state.api_result = api_result
@@ -882,7 +892,9 @@ def render_result_page(df_vdot, df_pace, api_key):
         
         md_content = st.session_state.training_plan
         md_bytes = create_md_download(md_content)
-        filename = f"training_plan_{user_data.get('name', 'user')}_{datetime.now().strftime('%Y%m%d')}.md"
+        # ファイル名に使えない文字・空白をアンダースコアに置換
+        safe_name = re.sub(r'[\\/:*?"<>|\s]+', '_', user_data.get('name', 'user')).strip('_') or 'user'
+        filename = f"training_plan_{safe_name}_{jst_now().strftime('%Y%m%d')}.md"
         
         st.download_button(
             label="📥 週間トレーニング計画をダウンロード",
