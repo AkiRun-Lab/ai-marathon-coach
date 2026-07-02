@@ -2,7 +2,7 @@
 マラソントレーニング・プランナー - Streamlit App
 ジャック・ダニエルズのVDOT理論に基づくトレーニング計画生成
 
-Version: 1.0.0
+バージョンは src/config.py の APP_VERSION を正とする
 """
 
 import re
@@ -24,10 +24,9 @@ from src.vdot import (
     calculate_vdot_from_time,
     calculate_training_paces,
     calculate_marathon_time_from_vdot,
-    get_training_start_date,
 )
 from src.ai import GeminiClient, create_training_prompt
-from src.ai.gemini_client import sanitize_gemini_output, create_md_download
+from src.ai.gemini_client import create_md_download
 from src.ui import load_css, render_vdot_display, render_phase_table
 from src.ui.components import (
     render_header,
@@ -800,25 +799,17 @@ def render_result_page(df_vdot, df_pace, api_key):
 
             else:
                 response = api_result['response']
-                # JSONからMarkdownへの変換（失敗時はNoneが返る）
+                # JSONからMarkdownへの変換（失敗時は (None, 0) が返る）
                 from src.ai.gemini_client import convert_json_to_markdown
-                markdown_plan = convert_json_to_markdown(response, user_data=user_data)
+                markdown_plan, actual_weeks = convert_json_to_markdown(response, user_data=user_data)
 
                 if markdown_plan is None:
                     st.session_state.generation_state = "error"
                     st.session_state.generation_error = "⚠️ AIの応答データの変換に失敗しました。お手数ですが「再生成する」ボタンをお試しください。"
                 else:
                     # 週数チェック（警告のみ、ブロックはしない）
-                    import json
-                    try:
-                        json_data = json.loads(response.strip().lstrip('```json').lstrip('```').rstrip('```'))
-                        plan_data = json_data.get('plan', json_data) if isinstance(json_data, dict) else json_data
-                        if isinstance(plan_data, dict):
-                            actual_weeks = len(plan_data.get('weekly_schedules', []))
-                            if actual_weeks < training_weeks:
-                                st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
-                    except (json.JSONDecodeError, AttributeError):
-                        pass
+                    if actual_weeks < training_weeks:
+                        st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
 
                     st.session_state.training_plan = markdown_plan
                     st.session_state.generation_state = "done"

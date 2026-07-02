@@ -6,7 +6,7 @@ import html
 import os
 import streamlit as st
 
-from ..config import APP_NAME, APP_VERSION, NUM_PHASES
+from ..config import APP_NAME, APP_VERSION, NUM_PHASES, jst_now
 from ..vdot import calculate_phase_vdots
 
 
@@ -63,7 +63,7 @@ def render_footer() -> None:
     
     st.markdown(
         f'<p style="text-align: center; color: #888; font-size: 0.85rem; margin-top: 1rem;">'
-        f'{APP_NAME} v{APP_VERSION} | © 2025 AkiRun</p>',
+        f'{APP_NAME} v{APP_VERSION} | © 2025–{jst_now().year} AkiRun</p>',
         unsafe_allow_html=True
     )
 

@@ -12,4 +12,3 @@ from .paces import (
     calculate_training_paces,
     calculate_phase_vdots,
 )
-from .training import get_training_start_date

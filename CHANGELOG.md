@@ -19,6 +19,13 @@
 - **レース日に過去日付を選べないように**: `st.date_input` に `min_value=今日` を設定（週数が負になる異常表示を防止）。
 - **リトライを503/429のみに限定**: APIキー不備等の確定失敗まで2回リトライして計3回コール＋約6秒待たせていたのを即時エラー表示に変更。
 
+### 🧹 クリーンアップ（コードレビュー フェーズ4）
+- **未使用コードを削除**: `sanitize_gemini_output`（どこからも呼ばれていない）、`src/vdot/training.py`（`get_training_start_date` はapp.py内の実装と重複し未使用）、リポジトリ直下の手動確認スクリプト `test_format.py`。
+- **週数チェックのJSON二重パースを解消**: `convert_json_to_markdown` が `(Markdown, 週数)` を返すよう変更し、app.py側の再パース（`lstrip('```json')` の文字集合誤用を含む）を削除。
+- **JSON修復の挿入キーを中立化**: `_repair_json` の汎用パターンが欠落キーを `"menu"` と決め打ちし、既存の正しい `menu` を後勝ちで上書きしうる問題を `"_repaired"` キーに変更して解消。
+- **requirements.txt から pytest を分離**: 本番（Streamlit Cloud）に不要なテスト依存を `requirements-dev.txt` へ移動。
+- **表記の陳腐化を解消**: app.py docstringの固定バージョン表記を削除（`APP_VERSION` を正とする）、フッターの著作権年を動的化（© 2025–現在年）。
+
 ---
 
 ## v1.10.1 (2026-06-11)
