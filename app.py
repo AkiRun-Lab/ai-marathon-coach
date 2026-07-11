@@ -807,19 +807,12 @@ def render_result_page(df_vdot, df_pace, api_key):
         # 進捗表示と結果回収（生成中のrerun後もここで同じスレッドに再接続する）
         thread = st.session_state.get("generation_thread")
         if thread is not None:
-            progress_bar = st.progress(0.0, text="🏃 トレーニング計画を生成中...（1〜2分かかります）")
+            progress_bar = st.progress(0.0, text="トレーニング計画の作成を開始しています...")
             ESTIMATED_SECONDS = 90
             # watchdog: 単発のAPIハングはクライアント側のPLAN_TIMEOUT_SEC（600秒）で即断念する
             # 設計のため、リトライ・バックオフ分の余裕をみて700秒で進捗ループ自体を打ち切る
             # （APIハング時にループが永久に回り続けるのを防ぐ）
             GENERATION_TIMEOUT_SECONDS = 700
-            PHASE_MESSAGES = [
-                (0.00, "🏃 トレーニング計画を生成中...（1〜2分かかります）"),
-                (0.08, "🤖 AIがトレーニング計画を設計中..."),
-                (0.30, "📅 週ごとのメニューを作成中..."),
-                (0.70, "🔍 ペース・距離を最終調整中..."),
-                (0.90, "📝 仕上げをしています..."),
-            ]
 
             progress_state = st.session_state.get("progress_state") or {}
             start_time = st.session_state.get("generation_start_time") or time.time()
@@ -831,18 +824,16 @@ def render_result_page(df_vdot, df_pace, api_key):
                     break
                 progress = min(0.95, elapsed / ESTIMATED_SECONDS)
                 minutes, seconds = divmod(int(elapsed), 60)
+                # RFD/SDTと同一様式（段階的文言は完了間近と誤解させるため廃止・経過時間一本）
                 if progress_state.get("fallback"):
-                    # フォールバック中は段階的文言より優先して表示
-                    msg = f"🔁 混雑のため代替モデルで生成中... {minutes}分{seconds:02d}秒経過"
+                    msg = f"混雑のため代替モデルで計画を生成中... {minutes}分{seconds:02d}秒経過"
+                elif progress_state.get("attempt", 0) > 1:
+                    msg = (
+                        f"トレーニング計画を作成中... {minutes}分{seconds:02d}秒経過"
+                        f"（API混雑のため自動再試行{progress_state['attempt']}回目/最大{MAX_RETRIES+1}回）"
+                    )
                 else:
-                    msg = PHASE_MESSAGES[0][1]
-                    for threshold, text in PHASE_MESSAGES:
-                        if progress >= threshold:
-                            msg = text
-                    msg = f"{msg} {minutes}分{seconds:02d}秒経過"
-                    attempt = progress_state.get("attempt", 0)
-                    if attempt > 1:
-                        msg += f"（API混雑のため自動再試行{attempt}回目/最大{MAX_RETRIES+1}回）"
+                    msg = f"トレーニング計画を作成中... {minutes}分{seconds:02d}秒経過（目安 1〜2分）"
                 progress_bar.progress(progress, text=msg)
                 time.sleep(0.5)
 
