@@ -17,6 +17,7 @@ from src.config import (
     get_max_vdot_diff, validate_training_conditions,
     get_max_output_tokens, jst_now,
     GEMINI_AVAILABLE_MODELS, GEMINI_DEFAULT_MODEL,
+    GEMINI_FALLBACK_MODEL, FALLBACK_MAX_ATTEMPTS,
     AMAZON_STORE_URL,
 )
 from src.data_loader import load_csv_data
@@ -69,10 +70,72 @@ def init_session_state():
         "generation_thread": None,
         "api_result": None,
         "generation_start_time": None,
+        # ワーカースレッドと進捗ループで共有する進捗辞書（fallback / attempt）
+        "progress_state": None,
+        # 直近の計画が代替モデル（フォールバック）で生成されたか
+        "plan_used_fallback": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+
+# =============================================
+# 計画生成のリトライ＋503フォールバック（中核ループ）
+# =============================================
+# 503/429リトライの最大回数（初回＋MAX_RETRIES回＝計3回試行）
+MAX_RETRIES = 2
+
+
+def _call_with_retry_and_fallback(make_client, selected_model, prompt,
+                                  max_tokens, progress_state,
+                                  sleep_func=time.sleep):
+    """リトライ＋503フォールバックの中核ループ（ワーカースレッド実行用・st.*禁止）
+
+    - ステージ1: ユーザー選択モデルで MAX_RETRIES+1 回まで試行
+      （503/429は指数バックオフで再試行。既存挙動のまま）
+    - ステージ1が503で尽きた場合のみ、ステージ2: GEMINI_FALLBACK_MODEL で
+      FALLBACK_MAX_ATTEMPTS 回まで試行する（progress_state["fallback"]=True をセット）
+    - 429で尽きた場合・TIMEOUT_EXCEEDED・その他の確定エラーはフォールバックしない
+
+    Args:
+        make_client: モデル名を受けてクライアントを返すファクトリ（本番はGeminiClient）
+        progress_state: 進捗ループと共有するdict。"fallback"（代替モデル試行中か）と
+                        "attempt"（現ステージ内の試行番号・1始まり）を更新する
+        sleep_func: バックオフ待機関数（単体テストで差し替え可能）
+
+    Returns:
+        (response, error): 成功時 (テキスト, None) / 失敗時 (None, 例外)
+    """
+    stages = [
+        (selected_model, MAX_RETRIES + 1),
+        (GEMINI_FALLBACK_MODEL, FALLBACK_MAX_ATTEMPTS),
+    ]
+    last_error = None
+    for stage_index, (model_name, max_attempts) in enumerate(stages):
+        if stage_index == 1:
+            progress_state["fallback"] = True
+        client = make_client(model_name)
+        for attempt in range(max_attempts):
+            progress_state["attempt"] = attempt + 1
+            try:
+                response = client.generate_content(prompt, max_output_tokens=max_tokens)
+                return response, None
+            except Exception as e:
+                last_error = e
+                err_str = str(e)
+                # リトライは一時的なエラー（503/429）のみ。認証エラー・タイムアウト等の
+                # 確定失敗は即時終了（既存挙動維持）
+                retryable = ("503_SERVICE_UNAVAILABLE" in err_str
+                             or "429_RATE_LIMITED" in err_str)
+                if not retryable:
+                    return None, e
+                if attempt < max_attempts - 1:
+                    sleep_func(2 ** (attempt + 1))
+        # ステージの試行が尽きた。フォールバックに進むのは503で尽きた場合のみ
+        if "503_SERVICE_UNAVAILABLE" not in str(last_error):
+            break
+    return None, last_error
 
 
 # =============================================
@@ -463,6 +526,8 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     st.session_state.generation_error = None
     st.session_state.generation_thread = None
     st.session_state.api_result = None
+    st.session_state.progress_state = None
+    st.session_state.plan_used_fallback = False
     st.session_state.form_submitted = True
     st.rerun()
 
@@ -702,13 +767,10 @@ def render_result_page(df_vdot, df_pace, api_key):
 </div>
         """, unsafe_allow_html=True)
         
-        MAX_RETRIES = 2
-
         if gen_state == "pending":
             # 生成開始: スレッドと結果コンテナをsession_stateに保持してから起動する
             try:
                 selected_model = st.session_state.get('selected_model', GEMINI_DEFAULT_MODEL)
-                client = GeminiClient(api_key, model_name=selected_model)
                 effective_target_vdot_for_prompt = {"vdot": effective_target_vdot}
                 prompt = create_training_prompt(
                     user_data, vdot_info, pace_info, effective_target_vdot_for_prompt,
@@ -718,26 +780,21 @@ def render_result_page(df_vdot, df_pace, api_key):
 
                 # APIコールをバックグラウンドスレッドで実行
                 api_result = {'response': None, 'error': None}
+                progress_state = {'fallback': False, 'attempt': 0}
+
+                def make_client(model_name):
+                    return GeminiClient(api_key, model_name=model_name)
 
                 def run_api_call():
-                    for attempt in range(MAX_RETRIES + 1):
-                        try:
-                            response = client.generate_content(prompt, max_output_tokens=max_tokens)
-                            api_result['response'] = response
-                            return
-                        except Exception as e:
-                            # リトライは一時的なエラー（503/429）のみ。認証エラー等の確定失敗は即時終了
-                            err_str = str(e)
-                            retryable = ("503_SERVICE_UNAVAILABLE" in err_str
-                                         or "429_RATE_LIMITED" in err_str)
-                            if retryable and attempt < MAX_RETRIES:
-                                time.sleep(2 ** (attempt + 1))
-                            else:
-                                api_result['error'] = e
-                                return
+                    response, error = _call_with_retry_and_fallback(
+                        make_client, selected_model, prompt, max_tokens, progress_state
+                    )
+                    api_result['response'] = response
+                    api_result['error'] = error
 
                 thread = threading.Thread(target=run_api_call, daemon=True)
                 st.session_state.api_result = api_result
+                st.session_state.progress_state = progress_state
                 st.session_state.generation_thread = thread
                 st.session_state.generation_start_time = time.time()
                 st.session_state.generation_state = "running"
@@ -752,6 +809,10 @@ def render_result_page(df_vdot, df_pace, api_key):
         if thread is not None:
             progress_bar = st.progress(0.0, text="🏃 トレーニング計画を生成中...（1〜2分かかります）")
             ESTIMATED_SECONDS = 90
+            # watchdog: 単発のAPIハングはクライアント側のPLAN_TIMEOUT_SEC（600秒）で即断念する
+            # 設計のため、リトライ・バックオフ分の余裕をみて700秒で進捗ループ自体を打ち切る
+            # （APIハング時にループが永久に回り続けるのを防ぐ）
+            GENERATION_TIMEOUT_SECONDS = 700
             PHASE_MESSAGES = [
                 (0.00, "🏃 トレーニング計画を生成中...（1〜2分かかります）"),
                 (0.08, "🤖 AIがトレーニング計画を設計中..."),
@@ -760,59 +821,95 @@ def render_result_page(df_vdot, df_pace, api_key):
                 (0.90, "📝 仕上げをしています..."),
             ]
 
+            progress_state = st.session_state.get("progress_state") or {}
             start_time = st.session_state.get("generation_start_time") or time.time()
+            timed_out = False
             while thread.is_alive():
                 elapsed = time.time() - start_time
+                if elapsed >= GENERATION_TIMEOUT_SECONDS:
+                    timed_out = True
+                    break
                 progress = min(0.95, elapsed / ESTIMATED_SECONDS)
-                msg = PHASE_MESSAGES[0][1]
-                for threshold, text in PHASE_MESSAGES:
-                    if progress >= threshold:
-                        msg = text
+                minutes, seconds = divmod(int(elapsed), 60)
+                if progress_state.get("fallback"):
+                    # フォールバック中は段階的文言より優先して表示
+                    msg = f"🔁 混雑のため代替モデルで生成中... {minutes}分{seconds:02d}秒経過"
+                else:
+                    msg = PHASE_MESSAGES[0][1]
+                    for threshold, text in PHASE_MESSAGES:
+                        if progress >= threshold:
+                            msg = text
+                    msg = f"{msg} {minutes}分{seconds:02d}秒経過"
+                    attempt = progress_state.get("attempt", 0)
+                    if attempt > 1:
+                        msg += f"（API混雑のため自動再試行{attempt}回目/最大{MAX_RETRIES+1}回）"
                 progress_bar.progress(progress, text=msg)
                 time.sleep(0.5)
 
-            thread.join()
-            progress_bar.progress(1.0, text="✅ 生成完了！")
-            time.sleep(0.4)
-            progress_bar.empty()
-
-            api_result = st.session_state.get("api_result") or {'response': None, 'error': None}
-            # スレッドは回収済み。以後のrerunで再接続・再実行されないよう破棄する
-            st.session_state.generation_thread = None
-            st.session_state.api_result = None
-
-            # エラー処理（自動再実行はせず、エラー状態として保存する）
-            if api_result['error'] is not None:
-                err_str = str(api_result['error'])
-                if "503_SERVICE_UNAVAILABLE" in err_str:
-                    error_msg = f"⚠️ サーバーが混雑しているため応答できませんでした（{MAX_RETRIES+1}回試行）。しばらく待ってから再度お試しください。"
-                elif "429_RATE_LIMITED" in err_str:
-                    error_msg = f"⚠️ APIのリクエスト上限に達しました（{MAX_RETRIES+1}回試行）。時間をおいてから再度お試しください。"
-                else:
-                    error_msg = f"APIエラーが発生しました（{MAX_RETRIES+1}回試行）: {err_str}"
+            if timed_out:
+                # watchdog発火: スレッドはdaemonのため放置してよい。
+                # 状態機械の保持物をクリアして error へ遷移する（通常のエラー処理と同じ流儀）
+                progress_bar.empty()
+                st.session_state.generation_thread = None
+                st.session_state.api_result = None
+                st.session_state.progress_state = None
                 st.session_state.generation_state = "error"
-                st.session_state.generation_error = error_msg
-
-            elif not api_result['response']:
-                st.session_state.generation_state = "error"
-                st.session_state.generation_error = "⚠️ AIからの応答が空でした。混雑している可能性があります。時間をおいて再生成をお試しください。"
-
+                st.session_state.generation_error = "⚠️ 計画の生成に時間がかかりすぎています。時間をおいて再試行してください。"
             else:
-                response = api_result['response']
-                # JSONからMarkdownへの変換（失敗時は (None, 0) が返る）
-                from src.ai.gemini_client import convert_json_to_markdown
-                markdown_plan, actual_weeks = convert_json_to_markdown(response, user_data=user_data)
+                thread.join()
 
-                if markdown_plan is None:
+                api_result = st.session_state.get("api_result") or {'response': None, 'error': None}
+                used_fallback = bool(progress_state.get("fallback"))
+                # スレッドは回収済み。以後のrerunで再接続・再実行されないよう破棄する
+                st.session_state.generation_thread = None
+                st.session_state.api_result = None
+                st.session_state.progress_state = None
+
+                # エラー処理（自動再実行はせず、エラー状態として保存する）
+                if api_result['error'] is not None:
+                    # 失敗時はプログレスバーを消してからエラー表示（「生成中」表示を残さない）
+                    progress_bar.empty()
+                    err_str = str(api_result['error'])
+                    if "503_SERVICE_UNAVAILABLE" in err_str:
+                        error_msg = (f"⚠️ サーバーが混雑しているため応答できませんでした"
+                                     f"（代替モデル含め{MAX_RETRIES+1+FALLBACK_MAX_ATTEMPTS}回試行）。"
+                                     f"しばらく待ってから再度お試しください。")
+                    elif "429_RATE_LIMITED" in err_str:
+                        error_msg = f"⚠️ APIのリクエスト上限に達しました（{MAX_RETRIES+1}回試行）。時間をおいてから再度お試しください。"
+                    elif "TIMEOUT_EXCEEDED" in err_str:
+                        error_msg = "⚠️ 計画生成が10分を超えたため中断しました。時間をおいて再試行してください。"
+                    else:
+                        error_msg = f"APIエラーが発生しました: {err_str}"
                     st.session_state.generation_state = "error"
-                    st.session_state.generation_error = "⚠️ AIの応答データの変換に失敗しました。お手数ですが「再生成する」ボタンをお試しください。"
-                else:
-                    # 週数チェック（警告のみ、ブロックはしない）
-                    if actual_weeks < training_weeks:
-                        st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
+                    st.session_state.generation_error = error_msg
 
-                    st.session_state.training_plan = markdown_plan
-                    st.session_state.generation_state = "done"
+                elif not api_result['response']:
+                    progress_bar.empty()
+                    st.session_state.generation_state = "error"
+                    st.session_state.generation_error = "⚠️ AIからの応答が空でした。混雑している可能性があります。時間をおいて再生成をお試しください。"
+
+                else:
+                    response = api_result['response']
+                    # JSONからMarkdownへの変換（失敗時は (None, 0) が返る）
+                    from src.ai.gemini_client import convert_json_to_markdown
+                    markdown_plan, actual_weeks = convert_json_to_markdown(response, user_data=user_data)
+
+                    if markdown_plan is None:
+                        progress_bar.empty()
+                        st.session_state.generation_state = "error"
+                        st.session_state.generation_error = "⚠️ AIの応答データの変換に失敗しました。お手数ですが「再生成する」ボタンをお試しください。"
+                    else:
+                        progress_bar.progress(1.0, text="✅ 生成完了！")
+                        time.sleep(0.4)
+                        progress_bar.empty()
+
+                        # 週数チェック（警告のみ、ブロックはしない）
+                        if actual_weeks < training_weeks:
+                            st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
+
+                        st.session_state.training_plan = markdown_plan
+                        st.session_state.plan_used_fallback = used_fallback
+                        st.session_state.generation_state = "done"
 
     # 生成エラーの表示と再生成ボタン（rerunによる自動再実行はしない）
     if st.session_state.get("generation_state") == "error" and not st.session_state.training_plan:
@@ -826,7 +923,9 @@ def render_result_page(df_vdot, df_pace, api_key):
     if st.session_state.training_plan:
         st.markdown("---")
         st.markdown("## 📋 トレーニング計画")
-        
+        if st.session_state.get("plan_used_fallback"):
+            st.caption("※ APIの混雑のため、代替モデル（Gemini 3 Flash）で生成しました。")
+
         st.markdown(st.session_state.training_plan)
         
         # 計画下部: Amazon主CTA（ゴールド・ヒーローカード）
@@ -882,6 +981,10 @@ def render_result_page(df_vdot, df_pace, api_key):
         st.markdown("---")
         
         md_content = st.session_state.training_plan
+        if st.session_state.get("plan_used_fallback"):
+            # 注記はダウンロード内容の先頭に付ける（計画本文そのものには混ぜない）
+            md_content = ("> ※ APIの混雑のため、代替モデル（Gemini 3 Flash）で生成しました。\n\n"
+                          + md_content)
         md_bytes = create_md_download(md_content)
         # ファイル名に使えない文字・空白をアンダースコアに置換
         safe_name = re.sub(r'[\\/:*?"<>|\s]+', '_', user_data.get('name', 'user')).strip('_') or 'user'

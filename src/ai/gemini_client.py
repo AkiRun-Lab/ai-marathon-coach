@@ -21,6 +21,7 @@ from ..config import (
     GEMINI_RESPONSE_MIME_TYPE,
     GEMINI_THINKING_MODE,
     GEMINI_THINKING_LEVEL,
+    PLAN_TIMEOUT_SEC,
     get_max_output_tokens,
 )
 from ..vdot import (
@@ -65,15 +66,23 @@ class GeminiClient:
                     thinking_config=types.ThinkingConfig(
                         thinking_level=GEMINI_THINKING_LEVEL,
                     ) if GEMINI_THINKING_MODE else None,
+                    # SDKデフォルトは無期限のため、APIハング対策として明示タイムアウトを設定
+                    # （ミリ秒指定）。超過時は下のexcept節で TIMEOUT_EXCEEDED に分類される
+                    http_options=types.HttpOptions(timeout=PLAN_TIMEOUT_SEC * 1000),
                 ),
             )
             return response.text
         except Exception as e:
             err_str = str(e)
+            err_lower = err_str.lower()
             if "503" in err_str or "Service Unavailable" in err_str:
                 raise RuntimeError(f"503_SERVICE_UNAVAILABLE: {err_str}")
             elif "429" in err_str or "Resource Exhausted" in err_str:
                 raise RuntimeError(f"429_RATE_LIMITED: {err_str}")
+            elif ("timeout" in err_lower or "timed out" in err_lower
+                  or "deadline" in err_lower):
+                # PLAN_TIMEOUT_SEC超過等のタイムアウト。呼び出し側はリトライ・フォールバックせず即断念する
+                raise RuntimeError(f"TIMEOUT_EXCEEDED: {err_str}")
             else:
                 raise RuntimeError(f"Gemini API エラー: {err_str}")
 

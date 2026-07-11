@@ -20,7 +20,7 @@ def jst_now() -> datetime:
 # アプリ情報
 # =============================================
 APP_NAME = "マラソントレーニング・プランナー"
-APP_VERSION = "1.10.2"
+APP_VERSION = "1.11.0"
 
 # Amazonストアフロント（おすすめギア一覧）への送客先。
 # 当面はストアトップ。個別アイデアリストの短縮URLが用意できたら差し替える。
@@ -34,6 +34,14 @@ GEMINI_AVAILABLE_MODELS = {
     "gemini-3.1-flash-lite-preview": "Gemini 3.1 Flash Lite（軽量・高速）",
 }
 GEMINI_DEFAULT_MODEL = "gemini-3.5-flash"
+
+# 計画生成リクエストのタイムアウト（秒）。SDKデフォルトは無期限のためハング対策として明示
+PLAN_TIMEOUT_SEC = 600
+# 503（モデル高負荷）でリトライが尽きた際のフォールバックモデル。
+# UIのモデル選択とは独立に常にこのモデルへ切り替える（2026-07-11ユーザー決定）。
+# JSONモード＋thinking_level互換はSDT v1.13.0の実プローブ・実運用で確認済み
+GEMINI_FALLBACK_MODEL = "gemini-3-flash-preview"
+FALLBACK_MAX_ATTEMPTS = 2
 
 # Generation Config
 # 注: temperature / top_p / top_k は全 Gemini 3.x モデルで非推奨となり削除（公式: デフォルト設定が最適化済み）
