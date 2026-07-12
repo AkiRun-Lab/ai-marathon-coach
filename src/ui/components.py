@@ -4,10 +4,153 @@ AI Marathon Coach - UI Components
 """
 import html
 import os
+from typing import Optional
+
 import streamlit as st
 
-from ..config import APP_NAME, APP_VERSION, NUM_PHASES, jst_now
+from ..config import APP_NAME, APP_VERSION, NUM_PHASES, SHOE_CTA_VARIANTS, jst_now
 from ..vdot import calculate_phase_vdots
+
+
+def _format_sessions(value) -> str:
+    """ポイント練習回数を小数1桁で整形し、末尾の.0を落とす（2.0→"2"、2.5→"2.5"）"""
+    rounded = round(float(value), 1)
+    text = f"{rounded:.1f}"
+    if text.endswith(".0"):
+        text = text[:-2]
+    return text
+
+
+def build_shoe_cta_content(stats) -> Optional[dict]:
+    """plan_stats（st.session_state.plan_stats）から計画連動シューズCTAの表示内容を組み立てる
+
+    Args:
+        stats: summarize_plan_stats() の戻り値の形式
+               （{"weekly_load", "cta_category", "avg_weekly_km", "avg_point_sessions"}）または None
+
+    Returns:
+        {"title": str, "sub": str, "url": str, "data_line": str}
+        stats不正・必須キー欠落の場合はNone（例外は投げない）
+    """
+    if not isinstance(stats, dict):
+        return None
+
+    required_keys = ("weekly_load", "cta_category", "avg_weekly_km", "avg_point_sessions")
+    if not all(key in stats for key in required_keys):
+        return None
+
+    try:
+        sessions_str = _format_sessions(stats["avg_point_sessions"])
+        km_str = str(round(float(stats["avg_weekly_km"])))
+    except (TypeError, ValueError):
+        return None
+
+    category = stats["cta_category"]
+    variant = SHOE_CTA_VARIANTS.get(category, SHOE_CTA_VARIANTS["general"])
+
+    title = variant["title"].format(sessions=sessions_str, km=km_str)
+    sub = variant["sub"].format(sessions=sessions_str, km=km_str)
+    data_line = f"ポイント練習 週平均{sessions_str}回 ・ 週間走行距離 平均{km_str}km"
+
+    return {
+        "title": title,
+        "sub": sub,
+        "url": variant["url"],
+        "data_line": data_line,
+    }
+
+
+def render_shoe_cta(stats) -> bool:
+    """計画連動シューズ提案CTAカードを表示する
+
+    Args:
+        stats: st.session_state.plan_stats の内容（build_shoe_cta_content参照）
+
+    Returns:
+        描画できた場合True。stats不正で描画できない場合はFalse（呼び出し側は汎用CTAにフォールバックする）
+    """
+    content = build_shoe_cta_content(stats)
+    if content is None:
+        return False
+
+    st.markdown(
+        f"""
+<style>
+.akirun-shoe-cta {{
+    background: linear-gradient(135deg, #F4C66B 0%, #E0A23D 100%);
+    border-radius: 16px;
+    padding: 2rem 1.5rem 1.6rem;
+    margin: 1.5rem 0 0.6rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}}
+.akirun-shoe-cta .shoe-cta-badge {{
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #1F3A6B, #2E5AA8);
+    color: white;
+    padding: 0.25rem 1.2rem;
+    border-radius: 0 0 8px 8px;
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}}
+.akirun-shoe-cta .shoe-cta-data {{
+    color: #4a3b14;
+    font-size: 0.8rem;
+    margin: 1.1rem 0 0.4rem;
+}}
+.akirun-shoe-cta .shoe-cta-title {{
+    color: #1F3A6B;
+    font-weight: 800;
+    font-size: clamp(1.15rem, 4.6vw, 1.5rem);
+    margin: 0 0 0.5rem;
+}}
+.akirun-shoe-cta .shoe-cta-sub {{
+    color: #4a3b14;
+    font-size: clamp(0.85rem, 3.2vw, 0.98rem);
+    line-height: 1.6;
+    margin: 0 auto 1.3rem;
+    max-width: 34em;
+}}
+.akirun-shoe-cta-btn {{
+    display: inline-block;
+    background: #1F3A6B;
+    color: #ffffff !important;
+    padding: 0.95rem 2.4rem;
+    border-radius: 10px;
+    text-decoration: none !important;
+    font-weight: 800;
+    font-size: clamp(1rem, 3.8vw, 1.2rem);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.3);
+}}
+.akirun-shoe-cta-btn:hover, .akirun-shoe-cta-btn:visited, .akirun-shoe-cta-btn:focus {{
+    color: #ffffff !important;
+    text-decoration: none !important;
+}}
+.akirun-shoe-cta .shoe-cta-note {{
+    color: #5a4a1f;
+    font-size: 0.72rem;
+    margin: 1rem 0 0;
+}}
+</style>
+<div class="akirun-shoe-cta">
+    <div class="shoe-cta-badge">📊 この計画の分析から</div>
+    <p style="font-size: 2.2rem; margin: 1.1rem 0 0.2rem;">👟</p>
+    <p class="shoe-cta-data">{content["data_line"]}</p>
+    <p class="shoe-cta-title">{content["title"]}</p>
+    <p class="shoe-cta-sub">{content["sub"]}</p>
+    <a class="akirun-shoe-cta-btn" href="{content["url"]}" target="_blank" rel="noopener noreferrer sponsored">👟 おすすめシューズ一覧（Amazon）を見る ›</a>
+    <p class="shoe-cta-note">ウェア・補給などの愛用ギア一覧も同じページにあります<br>※ Amazonのアソシエイトとして適格販売により収入を得ています</p>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    return True
 
 
 def load_css() -> None:

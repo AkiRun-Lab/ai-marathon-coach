@@ -35,6 +35,7 @@ from src.ui.components import (
     render_footer,
     render_vdot_explanation,
     render_warning_box,
+    render_shoe_cta,
 )
 
 
@@ -923,8 +924,10 @@ def render_result_page(df_vdot, df_pace, api_key):
 
         st.markdown(st.session_state.training_plan)
         
-        # 計画下部: Amazon主CTA（ゴールド・ヒーローカード）
-        st.markdown(f"""
+        # 計画下部: 計画連動シューズCTA（集計が取れないときは従来の汎用ギアCTAにフォールバック）
+        if not render_shoe_cta(st.session_state.get("plan_stats")):
+            # Amazon主CTA（ゴールド・ヒーローカード・フォールバック用）
+            st.markdown(f"""
 <div style="
     background: linear-gradient(135deg, #F4C66B 0%, #E0A23D 100%);
     border-radius: 16px;
@@ -970,8 +973,8 @@ def render_result_page(df_vdot, df_pace, api_key):
         ※ Amazonのアソシエイトとして適格販売により収入を得ています
     </p>
 </div>
-        """, unsafe_allow_html=True)
-        
+            """, unsafe_allow_html=True)
+
         # ダウンロードボタン
         st.markdown("---")
         
