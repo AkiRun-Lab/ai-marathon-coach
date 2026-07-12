@@ -90,6 +90,10 @@ class TestClassifyDay:
     def test_menu_keyword_fallback_easy(self):
         assert classify_day("Eジョグ（回復）", "") == "E"
 
+    def test_menu_keyword_fallback_e_pace(self):
+        # Gemini実出力で確認されたパターン（paceに記号なし・menuが「Eペース〜」）
+        assert classify_day("Eペース走 + WS", "4:53〜4:19/km") == "E"
+
     def test_menu_keyword_fallback_long_run(self):
         assert classify_day("ロング走（有酸素）", "") == "E"
 

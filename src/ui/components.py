@@ -257,7 +257,7 @@ def render_weekly_load_chart(stats) -> bool:
         .properties(height=320)
     )
 
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
     total_km_values = []
     peak_week = None
