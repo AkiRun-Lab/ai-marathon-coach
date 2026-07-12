@@ -19,18 +19,24 @@ from typing import Optional
 _REST_KEYWORDS = ["休養", "休み", "完全休", "オフ"]
 
 # menuキーワードによる強度分類フォールバック（pace記号で判定できない場合に使う）
+# 先勝ち。「クルーズインターバル」は閾値系のため「インターバル」より先に判定する
 _MENU_KEYWORD_MAP = [
+    (["クルーズ", "閾値", "テンポ"], "T"),
     (["インターバル"], "I"),
     (["レペ"], "R"),
-    (["閾値", "テンポ"], "T"),
     (["マラソンペース", "Mペース"], "M"),
     (["ジョグ", "イージー", "回復", "ロング", "LSD", "Eペース"], "E"),
 ]
 
-# pace文字列の語頭にある強度記号（E/M/T/I/R）を検出する正規表現
-# 例: "E 4:50〜5:00/km" / "R 3:12/km（200m≒38秒）" / "T20分" / "E＋流し" 等
-# 直後に英字が続く場合（"Easy"のE等ではなく英単語）は記号ではないため除外
-_PACE_SYMBOL_RE = re.compile(r"^\s*(E|M|T|I|R)(?![a-zA-Z])")
+# 文字列中の強度記号（E/M/T/I/R）を検出する正規表現
+# 例: "E 4:50〜5:00/km" / "R 3:12/km（200m≒38秒）" / "T20分" / "E＋流し" /
+#     複合練習 "E 5:33〜4:55/km, M 4:30/km" 等（先頭に限らずすべて拾う）
+# 前後に英字が続く場合（"Easy"のE等、英単語の一部）は記号ではないため除外
+_PACE_SYMBOL_RE = re.compile(r"(?<![A-Za-z])(E|M|T|I|R)(?=[\s:：0-9ペ+＋/／])")
+
+# 複合練習（例: Eジョグ + Mペース刺激）は最も強度の高い要素で分類する
+# （ポイント練習を含む日をポイント練習として数えるため）
+_INTENSITY_RANK = {"E": 0, "M": 1, "T": 2, "I": 3, "R": 4}
 
 # distanceの数値抽出（範囲表記 "10-12km" / "10〜12km" にも対応）
 _DISTANCE_RANGE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[-〜~]\s*(\d+(?:\.\d+)?)")
@@ -71,10 +77,11 @@ def classify_day(menu, pace) -> str:
     """1日分のmenu/paceから強度種別を判定する
 
     判定順序:
-        1. paceの語頭にE/M/T/I/Rの記号がある → その記号
-           （「レスト3分」等の休養系語が練習メニュー内に混在しても誤判定しないよう最優先）
+        1. paceにE/M/T/I/Rの記号がある → 最も強度の高い記号
+           （複合練習 "E 5:33/km, M 4:30/km" はM。「レスト3分」等の休養系語が
+           練習メニュー内に混在しても誤判定しないよう最優先）
         2. menu/paceに休養系キーワードが含まれる、またはmenu単独が「レスト」 → "rest"
-        3. menuのキーワードでフォールバック判定
+        3. menuの強度記号・キーワードでフォールバック判定（複数該当時は最も強度の高いもの）
         4. いずれも該当なし → "other"
 
     Args:
@@ -87,13 +94,17 @@ def classify_day(menu, pace) -> str:
     menu_str = str(menu).strip() if menu else ""
     pace_str = str(pace).strip() if pace else ""
 
-    symbol_match = _PACE_SYMBOL_RE.match(pace_str)
-    if symbol_match:
-        return symbol_match.group(1)
+    pace_symbols = _PACE_SYMBOL_RE.findall(pace_str)
+    if pace_symbols:
+        return max(pace_symbols, key=lambda s: _INTENSITY_RANK[s])
 
     combined = f"{menu_str} {pace_str}"
     if any(keyword in combined for keyword in _REST_KEYWORDS) or menu_str == "レスト":
         return "rest"
+
+    menu_symbols = _PACE_SYMBOL_RE.findall(menu_str)
+    if menu_symbols:
+        return max(menu_symbols, key=lambda s: _INTENSITY_RANK[s])
 
     for keywords, category in _MENU_KEYWORD_MAP:
         if any(keyword in menu_str for keyword in keywords):

@@ -94,6 +94,21 @@ class TestClassifyDay:
         # Gemini実出力で確認されたパターン（paceに記号なし・menuが「Eペース〜」）
         assert classify_day("Eペース走 + WS", "4:53〜4:19/km") == "E"
 
+    def test_combined_workout_takes_highest_intensity(self):
+        # Gemini実出力で確認された複合練習パターン。paceが「E …, M …」でも
+        # ポイント練習（M）として分類する（v1.12.0でE誤分類→全E色事故があった）
+        assert classify_day("Eジョグ + Mペース刺激 (ポイント練習2)", "E 5:33〜4:55/km, M 4:30/km") == "M"
+        assert classify_day("Eジョグ + T 20分 (ポイント練習1)", "E 5:30/km, T 4:19/km") == "T"
+
+    def test_cruise_interval_is_threshold(self):
+        # クルーズインターバルは閾値系（「インターバル」キーワードでI誤判定しない）
+        assert classify_day("Tクルーズインターバル (ポイント練習1)", "T 4:19/km") == "T"
+        assert classify_day("クルーズインターバル", "") == "T"
+
+    def test_menu_symbol_fallback_when_no_pace(self):
+        # paceに記号がなくてもmenu内の記号で複合練習を拾う
+        assert classify_day("Eロングラン + R 200m×6", "") == "R"
+
     def test_menu_keyword_fallback_long_run(self):
         assert classify_day("ロング走（有酸素）", "") == "E"
 
