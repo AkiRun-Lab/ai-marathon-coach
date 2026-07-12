@@ -23,27 +23,29 @@ APP_NAME = "マラソントレーニング・プランナー"
 APP_VERSION = "1.12.0"
 
 # Amazonストアフロント（おすすめギア一覧）への送客先。
-# 当面はストアトップ。個別アイデアリストの短縮URLが用意できたら差し替える。
+# 汎用CTAはストアトップ、シューズCTAは下のアイデアリスト個別URLを使う。
 AMAZON_STORE_URL = "https://www.amazon.co.jp/shop/yancearmstron"
+AMAZON_RACE_SHOES_LIST_URL = "https://amzn.to/44ZTgZQ"      # リスト①: サブ3を狙うレースシューズ
+AMAZON_DAILY_TRAINER_LIST_URL = "https://amzn.to/4wBLAsD"   # リスト②: 練習用デイリートレーナー
 
 # 計画連動シューズ提案CTAの文言バリアント（plan_stats.judge_shoe_cta_category の戻り値がキー）
-# url は当面すべてストアトップ。レースシューズ/デイリートレーナーの個別リストURLが
-# 発行されたら、該当カテゴリの url を差し替えるだけで反映される（RFDのWEAKNESS_CTA_VARIANTSと同じ運用）
+# point_heavy はレースシューズ、balanced/easy_focus はデイリートレーナーのアイデアリストへ送客する
+# （2026-07-12発行の短縮URL）。general のみ保険としてストアトップ
 SHOE_CTA_VARIANTS = {
     "point_heavy": {
         "title": "スピード練習用とジョグ用、2足ローテーションが合う計画です",
         "sub": "インターバルや閾値走などのポイント練習が週平均{sessions}回入る計画です。ポイント練習・レース用シューズと、Eジョグ用のデイリートレーナーを分けると、練習の質を保ちながら脚への負担を分散しやすくなります。私が実走で使っているおすすめ一覧から探せます。",
-        "url": AMAZON_STORE_URL,
+        "url": AMAZON_RACE_SHOES_LIST_URL,
     },
     "balanced": {
         "title": "デイリートレーナーを軸に、ポイント練習用の1足があると心強い計画です",
         "sub": "週平均{km}kmの走り込みを支えるデイリートレーナーを軸に、週{sessions}回のポイント練習用にもう1足。用途別のおすすめ一覧にまとめています。",
-        "url": AMAZON_STORE_URL,
+        "url": AMAZON_DAILY_TRAINER_LIST_URL,
     },
     "easy_focus": {
         "title": "距離を踏む計画。脚を守るデイリートレーナーが主役です",
         "sub": "週平均{km}kmを積み上げる計画では、クッション性と耐久性のあるデイリートレーナーが練習の土台になります。私が実走で使っているおすすめ一覧から選べます。",
-        "url": AMAZON_STORE_URL,
+        "url": AMAZON_DAILY_TRAINER_LIST_URL,
     },
     "general": {
         "title": "練習用とレース用のシューズの使い分けが、練習の質を支えます",
