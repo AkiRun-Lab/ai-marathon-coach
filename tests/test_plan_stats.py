@@ -109,6 +109,15 @@ class TestClassifyDay:
         # paceに記号がなくてもmenu内の記号で複合練習を拾う
         assert classify_day("Eロングラン + R 200m×6", "") == "R"
 
+    def test_symbol_followed_by_kana(self):
+        # Gemini実出力で確認された表記（記号の直後にカタカナ）。paceに記号がなくても拾う
+        assert classify_day("Eランニング", "6:22〜5:41/km") == "E"
+        assert classify_day("Eランニング ＋ ウインドスプリント(WS) 5本", "6:22〜5:41/km") == "E"
+
+    def test_generic_running_menu_is_easy(self):
+        # 記号もキーワードもない汎用「〜ランニング」はEとみなす
+        assert classify_day("ゆっくりランニング", "") == "E"
+
     def test_menu_keyword_fallback_long_run(self):
         assert classify_day("ロング走（有酸素）", "") == "E"
 
