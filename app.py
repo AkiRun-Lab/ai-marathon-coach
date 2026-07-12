@@ -28,6 +28,7 @@ from src.vdot import (
 )
 from src.ai import GeminiClient, create_training_prompt
 from src.ai.gemini_client import create_md_download
+from src.plan_stats import summarize_plan_stats
 from src.ui import load_css, render_vdot_display, render_phase_table
 from src.ui.components import (
     render_header,
@@ -60,6 +61,7 @@ def init_session_state():
         "target_vdot": None,
         "training_paces": None,
         "training_plan": None,
+        "plan_stats": None,
         "data_loaded": False,
         "training_weeks": 12,
         "start_date": None,
@@ -522,6 +524,7 @@ def process_form_submission(name, age, gender, current_h, current_m, current_s,
     st.session_state.start_date = start_date
     # 生成状態をリセット（前回の計画・エラー・スレッド参照を破棄）
     st.session_state.training_plan = None
+    st.session_state.plan_stats = None
     st.session_state.generation_state = "pending"
     st.session_state.generation_error = None
     st.session_state.generation_thread = None
@@ -881,9 +884,9 @@ def render_result_page(df_vdot, df_pace, api_key):
 
                 else:
                     response = api_result['response']
-                    # JSONからMarkdownへの変換（失敗時は (None, 0) が返る）
+                    # JSONからMarkdownへの変換（失敗時は (None, 0, None) が返る）
                     from src.ai.gemini_client import convert_json_to_markdown
-                    markdown_plan, actual_weeks = convert_json_to_markdown(response, user_data=user_data)
+                    markdown_plan, actual_weeks, plan_dict = convert_json_to_markdown(response, user_data=user_data)
 
                     if markdown_plan is None:
                         progress_bar.empty()
@@ -899,6 +902,7 @@ def render_result_page(df_vdot, df_pace, api_key):
                             st.warning(f"⚠️ AIが{training_weeks}週中{actual_weeks}週分しか出力できませんでした。再度お試しください。")
 
                         st.session_state.training_plan = markdown_plan
+                        st.session_state.plan_stats = summarize_plan_stats(plan_dict)
                         st.session_state.plan_used_fallback = used_fallback
                         st.session_state.generation_state = "done"
 
