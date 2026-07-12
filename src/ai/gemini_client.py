@@ -364,8 +364,13 @@ def convert_json_to_markdown(json_str: str, user_data: dict = None) -> Tuple[Opt
             repaired = _repair_json(json_str)
             try:
                 data = json.loads(repaired)
-            except json.JSONDecodeError:
-                # 修復も失敗
+            except json.JSONDecodeError as e:
+                # 修復も失敗。原因調査用に応答の概要をサーバーログへ残す
+                # （max_output_tokens到達による途中切断か、構文崩れかを末尾で判別できる）
+                print(
+                    f"[convert_json_to_markdown] JSON修復失敗: {e} / "
+                    f"応答長={len(json_str)}字 / 先頭200字={json_str[:200]!r} / 末尾200字={json_str[-200:]!r}"
+                )
                 return None, 0, None
         
         # 配列のトップレベルか、オブジェクト内のplanかを確認

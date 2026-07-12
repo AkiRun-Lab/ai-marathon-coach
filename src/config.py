@@ -74,8 +74,9 @@ FALLBACK_MAX_ATTEMPTS = 2
 # Generation Config
 # 注: temperature / top_p / top_k は全 Gemini 3.x モデルで非推奨となり削除（公式: デフォルト設定が最適化済み）
 # 注: thinkingトークンも max_output_tokens を消費するため、計画本文の必要量に思考分の余裕を上乗せした床値にする
-#     （16384だと12週計画の本文約16,400トークンでギリギリ→JSON途中切断の一因になりうるため24576へ引き上げ・2026-07）
-GEMINI_MAX_OUTPUT_TOKENS = 24576  # 最低保証値
+#     （16384だと12週計画の本文約16,400トークンでギリギリ→24576へ引き上げ後も、thinkingが長い生成回で
+#     途中切断＝変換エラーが実際に発生したため32768へ再引き上げ・2026-07-12。上限キャップであり課金は実生成分のみ）
+GEMINI_MAX_OUTPUT_TOKENS = 32768  # 最低保証値
 
 # Response Format
 GEMINI_RESPONSE_MIME_TYPE = "application/json"
