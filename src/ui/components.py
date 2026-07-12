@@ -6,10 +6,25 @@ import html
 import os
 from typing import Optional
 
+import altair as alt
+import pandas as pd
 import streamlit as st
 
 from ..config import APP_NAME, APP_VERSION, NUM_PHASES, SHOE_CTA_VARIANTS, jst_now
 from ..vdot import calculate_phase_vdots
+
+
+# 週間負荷グラフの強度種別（積み上げ順）と色
+# 強度は順序のあるカテゴリのため、単一色相（青）の薄→濃で強度順を符号化する
+# （ダーク背景 #0F172A に対して検証済みのordinalランプ。「その他」のみ中立グレー）
+_LOAD_CHART_TYPES = [
+    ("E", "E（イージー）", "#9ec5f4"),
+    ("M", "M（マラソン）", "#6da7ec"),
+    ("T", "T（閾値）", "#3987e5"),
+    ("I", "I（インターバル）", "#256abf"),
+    ("R", "R（レペ）", "#184f95"),
+    ("other", "その他", "#94a3b8"),
+]
 
 
 def _format_sessions(value) -> str:
@@ -150,6 +165,128 @@ def render_shoe_cta(stats) -> bool:
         """,
         unsafe_allow_html=True,
     )
+    return True
+
+
+def build_weekly_load_df(stats) -> Optional[pd.DataFrame]:
+    """plan_stats（st.session_state.plan_stats）から週間負荷グラフ用のlong形式DataFrameを組み立てる
+
+    Args:
+        stats: summarize_plan_stats() の戻り値の形式
+               （{"weekly_load", "cta_category", "avg_weekly_km", "avg_point_sessions"}）または None
+
+    Returns:
+        列: "週"(int)・"種別"(str・表示ラベル)・"距離"(float)・"順序"(int・積み上げ順インデックス)
+        distanceが0の行は含めない。statsが不正・weekly_loadが空・全breakdown合計が0の場合はNone
+    """
+    if not isinstance(stats, dict):
+        return None
+
+    weekly_load = stats.get("weekly_load")
+    if not isinstance(weekly_load, list) or not weekly_load:
+        return None
+
+    rows = []
+    for week in weekly_load:
+        if not isinstance(week, dict):
+            continue
+
+        week_num = week.get("week")
+        breakdown = week.get("breakdown")
+        if not isinstance(breakdown, dict):
+            continue
+
+        for order, (key, label, _color) in enumerate(_LOAD_CHART_TYPES):
+            try:
+                distance = float(breakdown.get(key, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                distance = 0.0
+
+            if distance <= 0:
+                continue
+
+            rows.append({
+                "週": week_num,
+                "種別": label,
+                "距離": distance,
+                "順序": order,
+            })
+
+    if not rows:
+        return None
+
+    return pd.DataFrame(rows)
+
+
+def render_weekly_load_chart(stats) -> bool:
+    """週間負荷（強度種別ごとの走行距離）の積み上げ棒グラフを表示する
+
+    Args:
+        stats: st.session_state.plan_stats の内容（build_weekly_load_df参照）
+
+    Returns:
+        描画できた場合True。statsが不正で描画できない場合はFalse
+    """
+    df = build_weekly_load_df(stats)
+    if df is None:
+        return False
+
+    st.subheader("📊 週間負荷の推移")
+
+    labels = [label for _key, label, _color in _LOAD_CHART_TYPES]
+    colors = [color for _key, _label, color in _LOAD_CHART_TYPES]
+
+    chart = (
+        alt.Chart(df)
+        .mark_bar(stroke="#0F172A", strokeWidth=1)
+        .encode(
+            x=alt.X("週:O", title="週"),
+            y=alt.Y("sum(距離):Q", title="距離（km）"),
+            color=alt.Color(
+                "種別:N",
+                scale=alt.Scale(domain=labels, range=colors),
+                legend=alt.Legend(title=None, orient="bottom"),
+            ),
+            order=alt.Order("順序:Q"),
+            tooltip=[
+                alt.Tooltip("週:O", title="週"),
+                alt.Tooltip("種別:N", title="種別"),
+                alt.Tooltip("距離:Q", title="距離", format=".1f"),
+            ],
+        )
+        .properties(height=320)
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+    total_km_values = []
+    peak_week = None
+    peak_km = 0.0
+    for week in stats["weekly_load"]:
+        if not isinstance(week, dict):
+            continue
+        try:
+            week_km = float(week.get("total_km", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            week_km = 0.0
+        total_km_values.append(week_km)
+        if peak_week is None or week_km > peak_km:
+            peak_week = week.get("week")
+            peak_km = week_km
+
+    num_weeks = len(total_km_values)
+    total_km = sum(total_km_values)
+    avg_km = total_km / num_weeks if num_weeks else 0.0
+
+    st.caption(
+        f"全{num_weeks}週 合計{round(total_km)}km ・ 週平均{round(avg_km)}km "
+        f"・ ピーク週は第{peak_week}週（{round(peak_km)}km）"
+    )
+    st.caption(
+        "週間走行距離の増やし方は、前週比10%以内が目安としてよく用いられます。"
+        "距離が下がる週は回復週で、意図的な設計です。"
+    )
+
     return True
 
 

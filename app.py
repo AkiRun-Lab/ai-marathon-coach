@@ -36,6 +36,7 @@ from src.ui.components import (
     render_vdot_explanation,
     render_warning_box,
     render_shoe_cta,
+    render_weekly_load_chart,
 )
 
 
@@ -923,7 +924,10 @@ def render_result_page(df_vdot, df_pace, api_key):
             st.caption("※ APIの混雑のため、代替モデル（Gemini 3 Flash）で生成しました。")
 
         st.markdown(st.session_state.training_plan)
-        
+
+        # 週間負荷グラフ（集計が取れないときは何も表示しない）
+        render_weekly_load_chart(st.session_state.get("plan_stats"))
+
         # 計画下部: 計画連動シューズCTA（集計が取れないときは従来の汎用ギアCTAにフォールバック）
         if not render_shoe_cta(st.session_state.get("plan_stats")):
             # Amazon主CTA（ゴールド・ヒーローカード・フォールバック用）
