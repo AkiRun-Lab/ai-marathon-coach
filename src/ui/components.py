@@ -28,15 +28,6 @@ _LOAD_CHART_TYPES = [
 ]
 
 
-def _format_sessions(value) -> str:
-    """ポイント練習回数を小数1桁で整形し、末尾の.0を落とす（2.0→"2"、2.5→"2.5"）"""
-    rounded = round(float(value), 1)
-    text = f"{rounded:.1f}"
-    if text.endswith(".0"):
-        text = text[:-2]
-    return text
-
-
 def build_shoe_cta_content(stats) -> Optional[dict]:
     """plan_stats（st.session_state.plan_stats）から計画連動シューズCTAの表示内容を組み立てる
 
@@ -47,6 +38,12 @@ def build_shoe_cta_content(stats) -> Optional[dict]:
     Returns:
         {"title": str, "sub": str, "url": str, "data_line": str}
         stats不正・必須キー欠落の場合はNone（例外は投げない）
+
+    Note:
+        シューズのカテゴリ判定には avg_point_sessions（強度M/T/I/Rの日数）を内部で使うが、
+        表示（data_line/文言）には回数を出さない。ユーザー入力欄「ポイント練習回数」や
+        計画本文のラベルと語が衝突して混乱を招くため（2026-07-16）。表示の数値軸は
+        争いのない週間走行距離のみとする。
     """
     if not isinstance(stats, dict):
         return None
@@ -56,17 +53,22 @@ def build_shoe_cta_content(stats) -> Optional[dict]:
         return None
 
     try:
-        sessions_str = _format_sessions(stats["avg_point_sessions"])
         km_str = str(round(float(stats["avg_weekly_km"])))
     except (TypeError, ValueError):
         return None
 
+    weekly_load = stats["weekly_load"]
+    num_weeks = len(weekly_load) if isinstance(weekly_load, list) else 0
+
     category = stats["cta_category"]
     variant = SHOE_CTA_VARIANTS.get(category, SHOE_CTA_VARIANTS["general"])
 
-    title = variant["title"].format(sessions=sessions_str, km=km_str)
-    sub = variant["sub"].format(sessions=sessions_str, km=km_str)
-    data_line = f"ポイント練習 週平均{sessions_str}回 ・ 週間走行距離 平均{km_str}km"
+    title = variant["title"].format(km=km_str)
+    sub = variant["sub"].format(km=km_str)
+    if num_weeks:
+        data_line = f"あなたの計画：全{num_weeks}週 ・ 週間走行距離 平均{km_str}km"
+    else:
+        data_line = f"あなたの計画：週間走行距離 平均{km_str}km"
 
     return {
         "title": title,

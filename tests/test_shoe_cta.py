@@ -28,8 +28,7 @@ class TestBuildShoeCtaContentCategories:
         stats = _make_stats(cta_category="point_heavy", avg_weekly_km=80, avg_point_sessions=2.5)
         content = build_shoe_cta_content(stats)
         assert content is not None
-        assert content["title"] == SHOE_CTA_VARIANTS["point_heavy"]["title"].format(sessions="2.5", km="80")
-        assert "{sessions}" not in content["title"]
+        assert content["title"] == SHOE_CTA_VARIANTS["point_heavy"]["title"]
         assert "{sessions}" not in content["sub"]
         assert "{km}" not in content["sub"]
         assert content["url"] == SHOE_CTA_VARIANTS["point_heavy"]["url"]
@@ -41,6 +40,7 @@ class TestBuildShoeCtaContentCategories:
         assert content["title"] == SHOE_CTA_VARIANTS["balanced"]["title"]
         assert "{sessions}" not in content["sub"]
         assert "{km}" not in content["sub"]
+        assert "60km" in content["sub"]
 
     def test_easy_focus(self):
         stats = _make_stats(cta_category="easy_focus", avg_weekly_km=45, avg_point_sessions=0.3)
@@ -57,19 +57,8 @@ class TestBuildShoeCtaContentCategories:
         assert content["sub"] == SHOE_CTA_VARIANTS["general"]["sub"]
 
 
-class TestNumberFormatting:
-    """sessionsは小数1桁（末尾.0は落とす）、kmは四捨五入の整数文字列"""
-
-    def test_sessions_integer_value_drops_trailing_zero(self):
-        stats = _make_stats(cta_category="point_heavy", avg_weekly_km=80, avg_point_sessions=2.0)
-        content = build_shoe_cta_content(stats)
-        assert "週平均2回" in content["data_line"]
-        assert "2.0" not in content["data_line"]
-
-    def test_sessions_decimal_kept(self):
-        stats = _make_stats(cta_category="point_heavy", avg_weekly_km=80, avg_point_sessions=2.5)
-        content = build_shoe_cta_content(stats)
-        assert "週平均2.5回" in content["data_line"]
+class TestDataLine:
+    """data_lineは週間距離を軸にし、ポイント練習の回数は表示しない（語の衝突回避・2026-07-16）"""
 
     def test_km_rounds_up(self):
         stats = _make_stats(cta_category="balanced", avg_weekly_km=55.6, avg_point_sessions=1.2)
@@ -81,10 +70,20 @@ class TestNumberFormatting:
         content = build_shoe_cta_content(stats)
         assert "平均55km" in content["data_line"]
 
-    def test_data_line_format(self):
-        stats = _make_stats(cta_category="balanced", avg_weekly_km=60, avg_point_sessions=1.2)
+    def test_data_line_has_no_point_session_count(self):
+        # 「ポイント練習◯回」等の回数表示を出さないこと（入力欄・計画ラベルとの衝突回避）
+        stats = _make_stats(cta_category="balanced", avg_weekly_km=60, avg_point_sessions=1.9)
         content = build_shoe_cta_content(stats)
-        assert content["data_line"] == "ポイント練習 週平均1.2回 ・ 週間走行距離 平均60km"
+        assert "ポイント練習" not in content["data_line"]
+        assert "回" not in content["data_line"]
+        assert "1.9" not in content["data_line"]
+
+    def test_data_line_includes_weeks_and_distance(self):
+        stats = _make_stats(cta_category="balanced", avg_weekly_km=60, avg_point_sessions=1.9)
+        # _make_stats は weekly_load を1件だけ持つ
+        content = build_shoe_cta_content(stats)
+        assert "全1週" in content["data_line"]
+        assert "平均60km" in content["data_line"]
 
 
 class TestInvalidInput:
