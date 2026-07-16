@@ -8,8 +8,8 @@ import os
 # srcディレクトリをパスに追加
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config import SHOE_CTA_VARIANTS
-from src.ui.components import build_shoe_cta_content
+from src.config import SHOE_CTA_VARIANTS, SHOE_FINDER_URL
+from src.ui.components import build_shoe_cta_content, build_shoe_finder_url
 
 
 def _make_stats(cta_category="general", avg_weekly_km=55.4, avg_point_sessions=1.5):
@@ -126,3 +126,32 @@ class TestAllVariantsHaveUrl:
     def test_all_urls_non_empty(self):
         for category, variant in SHOE_CTA_VARIANTS.items():
             assert variant["url"], f"{category} のurlが空です"
+
+
+class TestBuildShoeFinderUrl:
+    """シューマッチング診断ツールへのURL組み立て（build_shoe_finder_url）のテスト"""
+
+    def test_normal_value(self):
+        assert build_shoe_finder_url(54) == f"{SHOE_FINDER_URL}?vdot=54"
+
+    def test_float_rounds(self):
+        assert build_shoe_finder_url(54.6) == f"{SHOE_FINDER_URL}?vdot=55"
+        assert build_shoe_finder_url(54.4) == f"{SHOE_FINDER_URL}?vdot=54"
+
+    def test_none_returns_none(self):
+        assert build_shoe_finder_url(None) is None
+
+    def test_non_numeric_returns_none(self):
+        assert build_shoe_finder_url("invalid") is None
+        assert build_shoe_finder_url([]) is None
+        assert build_shoe_finder_url(True) is None
+
+    def test_below_min_clamped(self):
+        assert build_shoe_finder_url(10) == f"{SHOE_FINDER_URL}?vdot=30"
+
+    def test_above_max_clamped(self):
+        assert build_shoe_finder_url(120) == f"{SHOE_FINDER_URL}?vdot=85"
+
+    def test_at_boundaries(self):
+        assert build_shoe_finder_url(30) == f"{SHOE_FINDER_URL}?vdot=30"
+        assert build_shoe_finder_url(85) == f"{SHOE_FINDER_URL}?vdot=85"

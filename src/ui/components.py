@@ -10,7 +10,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from ..config import APP_NAME, APP_VERSION, NUM_PHASES, SHOE_CTA_VARIANTS, jst_now
+from ..config import APP_NAME, APP_VERSION, NUM_PHASES, SHOE_CTA_VARIANTS, SHOE_FINDER_URL, jst_now
 from ..vdot import calculate_phase_vdots
 
 
@@ -164,6 +164,99 @@ def render_shoe_cta(stats) -> bool:
     <p class="shoe-cta-sub">{content["sub"]}</p>
     <a class="akirun-shoe-cta-btn" href="{content["url"]}" target="_blank" rel="noopener noreferrer sponsored">👟 おすすめシューズ一覧（Amazon）を見る ›</a>
     <p class="shoe-cta-note">ウェア・補給などの愛用ギア一覧も同じページにあります<br>※ Amazonのアソシエイトとして適格販売により収入を得ています</p>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    return True
+
+
+# シューマッチング診断ツールが受け付けるVDOTの範囲（apps/shoe-finder/index.html のclampVdotと同一）
+SHOE_FINDER_VDOT_MIN = 30
+SHOE_FINDER_VDOT_MAX = 85
+
+
+def build_shoe_finder_url(vdot) -> Optional[str]:
+    """VDOTからシューマッチング診断ツールのURLを組み立てる（純粋関数）
+
+    Args:
+        vdot: VDOT値（float/int想定）。None・数値以外の場合はNoneを返す
+
+    Returns:
+        "{SHOE_FINDER_URL}?vdot={整数}" 形式のURL。vdotがNone・数値変換不可の場合はNone。
+        範囲外（30〜85）の値は診断ツール側と同じ規則でクランプする。
+    """
+    if vdot is None:
+        return None
+    if isinstance(vdot, bool):
+        return None
+    try:
+        vdot_float = float(vdot)
+    except (TypeError, ValueError):
+        return None
+
+    vdot_int = int(round(vdot_float))
+    vdot_int = max(SHOE_FINDER_VDOT_MIN, min(vdot_int, SHOE_FINDER_VDOT_MAX))
+    return f"{SHOE_FINDER_URL}?vdot={vdot_int}"
+
+
+def render_shoe_finder_cta(vdot) -> bool:
+    """シューマッチング診断ツールへの誘導CTAカードを表示する
+
+    Args:
+        vdot: st.session_state.calculated_vdot["vdot"] の値
+
+    Returns:
+        描画できた場合True。vdotが不正で描画できない場合はFalse（何も表示しない）
+    """
+    url = build_shoe_finder_url(vdot)
+    if url is None:
+        return False
+
+    st.markdown(
+        f"""
+<style>
+.akirun-shoe-finder-cta {{
+    background: linear-gradient(135deg, #4A7FE0 0%, #2C56A8 100%);
+    border-radius: 16px;
+    padding: 1.8rem 1.5rem 1.5rem;
+    margin: 1rem 0 0.6rem;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}}
+.akirun-shoe-finder-cta .shoe-finder-title {{
+    color: #ffffff;
+    font-weight: 800;
+    font-size: clamp(1.1rem, 4.4vw, 1.4rem);
+    margin: 0 0 0.5rem;
+}}
+.akirun-shoe-finder-cta .shoe-finder-sub {{
+    color: #eaf0ff;
+    font-size: clamp(0.85rem, 3.2vw, 0.95rem);
+    line-height: 1.6;
+    margin: 0 auto 1.2rem;
+    max-width: 34em;
+}}
+.akirun-shoe-finder-cta-btn {{
+    display: inline-block;
+    background: #ffffff;
+    color: #2C56A8 !important;
+    padding: 0.85rem 2.2rem;
+    border-radius: 10px;
+    text-decoration: none !important;
+    font-weight: 800;
+    font-size: clamp(1rem, 3.8vw, 1.1rem);
+    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.2);
+}}
+.akirun-shoe-finder-cta-btn:hover, .akirun-shoe-finder-cta-btn:visited, .akirun-shoe-finder-cta-btn:focus {{
+    color: #2C56A8 !important;
+    text-decoration: none !important;
+}}
+</style>
+<div class="akirun-shoe-finder-cta">
+    <p class="shoe-finder-title">あなたの練習ペースに合うシューズは？</p>
+    <p class="shoe-finder-sub">VDOTから練習ペース帯を算出し、レース用・スピード練用・デイリー用のおすすめを診断します。</p>
+    <a class="akirun-shoe-finder-cta-btn" href="{url}" target="_blank" rel="noopener noreferrer">👟 シューズ診断を開く ›</a>
 </div>
         """,
         unsafe_allow_html=True,

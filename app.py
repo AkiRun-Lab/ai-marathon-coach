@@ -36,6 +36,7 @@ from src.ui.components import (
     render_vdot_explanation,
     render_warning_box,
     render_shoe_cta,
+    render_shoe_finder_cta,
     render_weekly_load_chart,
 )
 
@@ -978,6 +979,18 @@ def render_result_page(df_vdot, df_pace, api_key):
     </p>
 </div>
             """, unsafe_allow_html=True)
+
+        # シューマッチング診断ツールへの誘導CTA（現在VDOTが取得できない場合は非表示。アプリ本体は壊さない）
+        try:
+            vdot_info_for_shoe_finder = st.session_state.get("calculated_vdot")
+            current_vdot = (
+                vdot_info_for_shoe_finder.get("vdot")
+                if isinstance(vdot_info_for_shoe_finder, dict)
+                else None
+            )
+            render_shoe_finder_cta(current_vdot)
+        except Exception:
+            pass
 
         # ダウンロードボタン
         st.markdown("---")
