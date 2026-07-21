@@ -1,5 +1,17 @@
 # マラソントレーニング・プランナー 更新履歴
 
+## v1.13.2 (2026-07-22)
+
+### 🔧 変更
+
+- **メイン生成モデルをGemini 3.6 Flashに更新**: `gemini-3.5-flash` → `gemini-3.6-flash`（GA版・出力単価$9.00→$7.50/1Mトークンに値下げ、効率向上）
+- **選択可能な軽量モデルをGemini 3.5 Flash Lite（GA）に更新**: `gemini-3.1-flash-lite-preview` → `gemini-3.5-flash-lite`
+- **503フォールバック先をGemini 3.5 Flash（GA）に変更**: `gemini-3-flash-preview` → `gemini-3.5-flash`。preview版の廃止リスクを解消（2026-07-22までメイン生成モデルとして本番稼働していたGA版）
+
+### 📝 注記
+
+- gemini-3.6-flash（JSONモード＋thinking_level=high）・gemini-3.5-flash-liteのAPI疎通スモークテスト、および実プロンプトでの計画生成E2E（16週計画・JSON→Markdown変換まで本番同一経路）は2026-07-22実施済み・成功
+
 ## v1.13.1 (2026-07-18)
 
 ### 🔧 変更

@@ -49,8 +49,8 @@ ai-marathon-coach/
 
 | 定数名 | デフォルト値 | 説明 |
 |:-------|:-------------|:-----|
-| GEMINI_MODEL_NAME | gemini-3-flash-preview | 使用するGeminiモデル |
-| GEMINI_TEMPERATURE | 0.7 | 生成の創造性（0〜2） |
+| GEMINI_DEFAULT_MODEL | gemini-3.6-flash | 使用するGeminiモデル |
+| GEMINI_FALLBACK_MODEL | gemini-3.5-flash | 503（高負荷）時のフォールバックモデル |
 | GEMINI_MAX_OUTPUT_TOKENS | 32768 | 最大出力トークン数 |
 | MIN_TRAINING_WEEKS | 12 | 最低トレーニング期間 |
 | NUM_PHASES | 4 | フェーズ数 |
