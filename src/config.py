@@ -20,7 +20,7 @@ def jst_now() -> datetime:
 # アプリ情報
 # =============================================
 APP_NAME = "マラソントレーニング・プランナー"
-APP_VERSION = "1.13.2"
+APP_VERSION = "1.13.3"
 
 # シューマッチング診断ツール（akirun.net内蔵アプリ・アフィリエイトではない）への送客先。
 # VDOTをクエリパラメータで渡し、練習ペース帯に合うシューズを診断する。
@@ -62,21 +62,23 @@ SHOE_CTA_VARIANTS = {
 }
 
 # =============================================
-# Gemini API Configuration (Gemini 3.6)
+# Gemini API Configuration (Gemini 3.7)
 # =============================================
 GEMINI_AVAILABLE_MODELS = {
-    "gemini-3.6-flash": "Gemini 3.6 Flash（高性能）",
+    "gemini-3.7-flash": "Gemini 3.7 Flash（高性能）",
     "gemini-3.5-flash-lite": "Gemini 3.5 Flash Lite（軽量・高速）",
 }
-GEMINI_DEFAULT_MODEL = "gemini-3.6-flash"
+GEMINI_DEFAULT_MODEL = "gemini-3.7-flash"
 
 # 計画生成リクエストのタイムアウト（秒）。SDKデフォルトは無期限のためハング対策として明示
 PLAN_TIMEOUT_SEC = 600
 # 503（モデル高負荷）でリトライが尽きた際のフォールバックモデル。
 # UIのモデル選択とは独立に常にこのモデルへ切り替える（2026-07-11ユーザー決定）。
-# gemini-3.5-flashは2026-07-22までメイン生成モデルとして本番稼働していたGA版であり、
-# JSONモード＋thinking_level互換は実運用で実証済み（preview版のような廃止リスクがない）
-GEMINI_FALLBACK_MODEL = "gemini-3.5-flash"
+# gemini-3.6-flashは2026-08-14までメイン生成モデルとして本番稼働していたGA版であり、
+# JSONモード＋thinking_level互換は実運用で実証済み（preview版のような廃止リスクがない）。
+# 3.5-flashから引き下げたのは、3.5-flashの出力単価$9.00がラインナップ中で最も高くなったため
+# （3.6/3.7は$3.75で同額・2026-08-14）
+GEMINI_FALLBACK_MODEL = "gemini-3.6-flash"
 FALLBACK_MAX_ATTEMPTS = 2
 
 # Generation Config
@@ -91,11 +93,12 @@ GEMINI_RESPONSE_MIME_TYPE = "application/json"
 
 # Thinking Config (Gemini 3.x Spec)
 # thinking_level: VDOT計算や週間走行距離の整合性チェックなど、深い推論を行わせるための思考レベル
-# 値は minimal / low / medium(デフォルト) / high。深い推論を要するため high を指定
+# 値は low / medium(デフォルト) / high。深い推論を要するため high を指定
+# （gemini-3.7-flash は minimal 非対応。当アプリは high 固定のため影響なし・2026-08-14確認）
 GEMINI_THINKING_MODE = True
 GEMINI_THINKING_LEVEL = "high"
 
-# Gemini 3.6 Flashの最大出力トークン数
+# Gemini 3.7 Flashの最大出力トークン数
 GEMINI_MAX_OUTPUT_TOKENS_LIMIT = 65536
 
 def get_max_output_tokens(training_weeks: int) -> int:
