@@ -5,17 +5,21 @@
 ### 🔧 変更
 
 - **メイン生成モデルをGemini 3.7 Flashに更新**: `gemini-3.6-flash` → `gemini-3.7-flash`（GA版・多段実行の信頼性向上を謳うモデル。計画生成はVDOT計算・週間走行距離の整合など多段の推論を要するため用途が一致）。単価は3.6と同額のためコスト影響なし
-- **503フォールバック先をGemini 3.6 Flashに変更**: `gemini-3.5-flash` → `gemini-3.6-flash`。`gemini-3.5-flash` は出力$9.00/1Mトークンとラインナップ中で最も高価になっており（3.6/3.7は$3.75）、フォールバック時のコストが下がる。3.6は2026-08-14までメイン生成モデルとして本番稼働していたGA版
+- **503フォールバック先をGemini 3.6 Flashに変更**: `gemini-3.5-flash` → `gemini-3.6-flash`。`gemini-3.5-flash` は出力$9.00/1Mトークンとラインナップ中で最も高価になっており（3.6/3.7は$3.75。これは2026-12-31までの促進価格で、2027-01-01以降は$7.50）、フォールバック時のコストが下がる。3.6は2026-08-14までメイン生成モデルとして本番稼働していたGA版
 - 選択可能な軽量モデル（`gemini-3.5-flash-lite`）は変更なし
 
 ### 📝 注記
 
 - `gemini-3.7-flash` は thinking_level の `minimal` に非対応（low/medium/high）。本アプリは `high` 固定のため影響なし
 - 検証（2026-08-14実施・すべて成功）：
-  - 実プロンプトでの計画生成E2E（16週・本番同一経路＝create_training_prompt → GeminiClient → convert_json_to_markdown）。所要47.0秒、応答30,266文字、16週すべて生成・日付行112（16週×7日）・各週の週間走行距離あり
+  - 実プロンプトでの計画生成E2E（16週・本番同一経路）を2回。所要36.0〜47.7秒、16週すべて生成・日付行112（16週×7日）・各週の週間走行距離あり
+  - 後段まで通し確認：`convert_json_to_markdown` → `summarize_plan_stats`（weekly_load・cta_category・avg_weekly_km・avg_point_sessionsが正常値）→ `create_md_download`。JSONのキー構成（introduction / basic_info / vdot_paces / phase_overview / weekly_schedules / precautions / coach_message / footer）は3.6時と同一
   - 生成された設定ペース表（E/M/T/I/R×4フェーズ）がアプリのCSV計算値（VDOT 51.87→55.38）と全項目一致
+  - 503フォールバック経路を偽クライアントで実行し、`gemini-3.7-flash` ×3試行 → `gemini-3.6-flash` へ遷移して成功することを確認
   - フォールバック先 `gemini-3.6-flash`・軽量 `gemini-3.5-flash-lite` のJSONモード疎通スモーク
+  - 既存テスト111件すべてpass
 - `max_output_tokens` 圧迫の懸念（3.7はthinking_level=highで思考トークンが増える可能性）は、16週計画（上限32,768）で途中切断なく完走したため現状問題なし
+- 計画内容の3.6比較（各1サンプル）：ポイント練習の週平均は3.7が1.81回・3.6が1.62回（いずれも回復週を1回に落とす設計で、指定の週2回に対して妥当）。週平均距離は62.7km・61.5km。生成所要時間は3.7が36〜48秒、3.6が343秒だったが、混雑状況に左右されるため各1サンプルでの比較にとどめる
 
 ## v1.13.2 (2026-07-22)
 
